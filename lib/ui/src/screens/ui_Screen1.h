@@ -20,9 +20,11 @@ extern lv_obj_t * ui_rpmbg;
 extern lv_obj_t * ui_rpmslider;
 extern lv_obj_t * ui_rpmscale;
 extern lv_obj_t * ui_Speed;
-extern lv_obj_t * ui_Image2;
-extern lv_obj_t * ui_Image3;
+extern lv_obj_t * ui_checkengine;
+extern lv_obj_t * ui_watertemp;
 // CUSTOM VARIABLES
+extern lv_obj_t * uic_checkengine;
+extern lv_obj_t * uic_watertemp;
 
 #ifdef __cplusplus
 } /*extern "C"*/

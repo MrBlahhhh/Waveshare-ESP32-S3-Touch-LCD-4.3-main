@@ -5,6 +5,8 @@
 
 #include "../ui.h"
 
+lv_obj_t * uic_watertemp;
+lv_obj_t * uic_checkengine;
 lv_obj_t * ui_Screen1 = NULL;
 lv_obj_t * ui_TopPanel = NULL;
 lv_obj_t * ui_RPM = NULL;
@@ -12,8 +14,8 @@ lv_obj_t * ui_rpmbg = NULL;
 lv_obj_t * ui_rpmslider = NULL;
 lv_obj_t * ui_rpmscale = NULL;
 lv_obj_t * ui_Speed = NULL;
-lv_obj_t * ui_Image2 = NULL;
-lv_obj_t * ui_Image3 = NULL;
+lv_obj_t * ui_checkengine = NULL;
+lv_obj_t * ui_watertemp = NULL;
 // event funtions
 
 // build funtions
@@ -107,25 +109,32 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_text_align(ui_Speed, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_Speed, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_Image2 = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_Image2, &ui_img_checkengine_png);
-    lv_obj_set_width(ui_Image2, 100);
-    lv_obj_set_height(ui_Image2, 100);
-    lv_obj_set_x(ui_Image2, -339);
-    lv_obj_set_y(ui_Image2, 182);
-    lv_obj_set_align(ui_Image2, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_Image2, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_Image2, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    ui_checkengine = lv_img_create(ui_Screen1);
+    lv_img_set_src(ui_checkengine, &ui_img_checkengine_png);
+    lv_obj_set_width(ui_checkengine, 100);
+    lv_obj_set_height(ui_checkengine, 100);
+    lv_obj_set_x(ui_checkengine, -339);
+    lv_obj_set_y(ui_checkengine, 182);
+    lv_obj_set_align(ui_checkengine, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_checkengine, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_checkengine, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_opa(ui_checkengine, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_Image3 = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_Image3, &ui_img_watertemp_png);
-    lv_obj_set_width(ui_Image3, 100);
-    lv_obj_set_height(ui_Image3, 100);
-    lv_obj_set_x(ui_Image3, -342);
-    lv_obj_set_y(ui_Image3, -182);
-    lv_obj_set_align(ui_Image3, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_Image3, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_Image3, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    ui_watertemp = lv_img_create(ui_Screen1);
+    lv_img_set_src(ui_watertemp, &ui_img_watertemp_png);
+    lv_obj_set_width(ui_watertemp, 100);
+    lv_obj_set_height(ui_watertemp, 100);
+    lv_obj_set_x(ui_watertemp, -342);
+    lv_obj_set_y(ui_watertemp, -182);
+    lv_obj_set_align(ui_watertemp, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_watertemp, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_watertemp, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_img_recolor(ui_watertemp, lv_color_hex(0x4040FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_img_recolor_opa(ui_watertemp, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_opa(ui_watertemp, 45, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    uic_checkengine = ui_checkengine;
+    uic_watertemp = ui_watertemp;
 
 }
 
@@ -141,7 +150,9 @@ void ui_Screen1_screen_destroy(void)
     ui_rpmslider = NULL;
     ui_rpmscale = NULL;
     ui_Speed = NULL;
-    ui_Image2 = NULL;
-    ui_Image3 = NULL;
+    uic_checkengine = NULL;
+    ui_checkengine = NULL;
+    uic_watertemp = NULL;
+    ui_watertemp = NULL;
 
 }
