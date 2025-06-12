@@ -28,7 +28,6 @@ extern lv_obj_t * ui_fuel2;
 extern lv_obj_t * ui_fuelslider;
 extern lv_obj_t * ui_dsc;
 extern lv_obj_t * ui_parkingbrake;
-extern void ui_event_turnsignal(lv_event_t * e);
 extern lv_obj_t * ui_turnsignal;
 // CUSTOM VARIABLES
 extern lv_obj_t * uic_rpmslider;

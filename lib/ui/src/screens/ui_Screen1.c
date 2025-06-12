@@ -38,18 +38,6 @@ void ui_event_Screen1(lv_event_t * e)
     }
 }
 
-void ui_event_turnsignal(lv_event_t * e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    if(event_code == LV_EVENT_FOCUSED) {
-        _ui_opacity_set(ui_turnsignal, 0);
-    }
-    if(event_code == LV_EVENT_DEFOCUSED) {
-        _ui_opacity_set(ui_turnsignal, 100);
-    }
-}
-
 // build funtions
 
 void ui_Screen1_screen_init(void)
@@ -232,10 +220,10 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_x(ui_turnsignal, -5);
     lv_obj_set_y(ui_turnsignal, 188);
     lv_obj_set_align(ui_turnsignal, LV_ALIGN_CENTER);
+    lv_obj_set_style_opa(ui_turnsignal, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_img_recolor(ui_turnsignal, lv_color_hex(0xEF1414), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_img_recolor_opa(ui_turnsignal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_add_event_cb(ui_turnsignal, ui_event_turnsignal, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_Screen1, ui_event_Screen1, LV_EVENT_ALL, NULL);
     uic_rpmslider = ui_rpmslider;
     uic_checkengine = ui_checkengine;
