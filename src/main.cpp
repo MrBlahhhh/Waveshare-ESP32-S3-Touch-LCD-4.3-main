@@ -177,7 +177,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 void setup()
 {
     Serial.begin(115200); /* prepare for possible serial debug */
-    delay(5000);       
+    delay(3000);       
 
     String LVGL_Arduino = "Hello LVGL! ";
     LVGL_Arduino += String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch();
