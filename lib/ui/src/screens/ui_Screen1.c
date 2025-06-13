@@ -80,7 +80,7 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_y(ui_rpmslider, 2);
     lv_obj_set_align(ui_rpmslider, LV_ALIGN_CENTER);
     lv_arc_set_range(ui_rpmslider, 0, 8000);
-    lv_arc_set_value(ui_rpmslider, 8000);
+    //lv_arc_set_value(ui_rpmslider, 8000);
     lv_obj_set_style_radius(ui_rpmslider, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_rpmslider, lv_color_hex(0xDC1A1A), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_rpmslider, 0, LV_PART_MAIN | LV_STATE_DEFAULT);

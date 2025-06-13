@@ -1,3 +1,4 @@
+
 #include <Arduino.h>
 
 /**
@@ -34,6 +35,11 @@
 #include <ui.h>
 #include <esp_now.h>
 #include <WiFi.h>
+
+// Declare UI objects from ui_screen1.c
+extern lv_obj_t *ui_rpmslider;
+extern lv_obj_t *ui_parkingbrake;
+
 // Extend IO Pin define
 #define TP_RST 1
 #define LCD_BL 2
@@ -60,7 +66,6 @@
 #define LVGL_TASK_STACK_SIZE    (4 * 1024)
 #define LVGL_TASK_PRIORITY      (2)
 #define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 20)
-
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -89,7 +94,7 @@ CanData receivedData; // Variable to store received data
 volatile bool dataReceived = false; // Flag to indicate new data
 
 ESP_Panel *panel = NULL;
-SemaphoreHandle_t lvgl_mux = NULL;                  // LVGL mutex
+SemaphoreHandle_t lvgl_mux = NULL; // LVGL mutex
 
 #if ESP_PANEL_LCD_BUS_TYPE == ESP_PANEL_BUS_TYPE_RGB
 /* Display flushing */
@@ -169,8 +174,8 @@ void lvgl_port_task(void *arg)
 /* ESP-NOW callback function */
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     memcpy(&receivedData, incomingData, sizeof(receivedData));
-    Serial.printf("Received ESP-NOW data: RPM=%u, Coolant=%u, Speed=%u, Fuel=%u\n",
-                  receivedData.rpm, receivedData.coolantTemp, receivedData.vehicleSpeed, receivedData.fuelTankLevel);
+    Serial.printf("Received ESP-NOW data: RPM=%u, Coolant=%u, Speed=%u, Fuel=%u, Handbrake=%u\n",
+                  receivedData.rpm, receivedData.coolantTemp, receivedData.vehicleSpeed, receivedData.fuelTankLevel, receivedData.handbrakeSwitch);
     dataReceived = true; // Set flag to update UI
 }
 
@@ -198,8 +203,6 @@ void setup()
 
     /* Register ESP-NOW receive callback */
     esp_now_register_recv_cb(OnDataRecv);
-
-
 
     panel = new ESP_Panel();
 
@@ -246,8 +249,6 @@ void setup()
      *
      */
     Serial.println("Initialize IO expander");
-    /* Initialize IO expander */
-    // ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000, I2C_MASTER_SCL_IO, I2C_MASTER_SDA_IO);
     ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000);
     expander->init();
     expander->begin();
@@ -255,7 +256,6 @@ void setup()
     expander->multiDigitalWrite(TP_RST | LCD_BL | LCD_RST | SD_CS, HIGH);
 
     // Turn off backlight
-    // expander->digitalWrite(USB_SEL, LOW);
     expander->digitalWrite(USB_SEL, LOW);
     /* Add into panel */
     panel->addIOExpander(expander);
@@ -270,7 +270,6 @@ void setup()
     /* Lock the mutex due to the LVGL APIs are not thread-safe */
     lvgl_port_lock(-1);
 
-    
     ui_init();
 
     /* Release the mutex */
@@ -281,6 +280,15 @@ void setup()
 
 void loop()
 {
-    // Serial.println("Loop");
+    // Update UI elements when new data is received
+    if (dataReceived) {
+        lvgl_port_lock(-1); // Lock LVGL mutex
+        // Update RPM slider
+        lv_arc_set_value(ui_rpmslider, receivedData.rpm);
+        // Update parking brake icon opacity
+        lv_obj_set_style_img_recolor_opa(ui_parkingbrake, receivedData.handbrakeSwitch ? 0 : 200, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lvgl_port_unlock(); // Unlock LVGL mutex
+        dataReceived = false; // Reset flag
+    }
     sleep(1);
 }
