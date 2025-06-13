@@ -41,11 +41,10 @@ LV_IMG_DECLARE(ui_img_rpmfront_png);    // assets/rpmfront.png
 LV_IMG_DECLARE(ui_img_rpmdial_png);    // assets/rpmdial.png
 LV_IMG_DECLARE(ui_img_checkengine_png);    // assets/checkengine.png
 LV_IMG_DECLARE(ui_img_watertemp_png);    // assets/watertemp.png
+LV_IMG_DECLARE(ui_img_turnsignal_png);    // assets/turnsignal.png
+LV_IMG_DECLARE(ui_img_parkingbrake_png);    // assets/parkingbrake.png
 LV_IMG_DECLARE(ui_img_322054780);    // assets/0-100gauge.png
 LV_IMG_DECLARE(ui_img_fuel_png);    // assets/fuel.png
-LV_IMG_DECLARE(ui_img_dcs_png);    // assets/dcs.png
-LV_IMG_DECLARE(ui_img_parkingbrake_png);    // assets/parkingbrake.png
-LV_IMG_DECLARE(ui_img_turnsignal_png);    // assets/turnsignal.png
 
 // UI INIT
 void ui_init(void);

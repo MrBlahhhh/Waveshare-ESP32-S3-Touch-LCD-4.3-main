@@ -5,13 +5,13 @@
 
 #include "../ui.h"
 
-lv_obj_t * uic_turnsignal;
-lv_obj_t * uic_parkingbrake;
-lv_obj_t * uic_dsc;
 lv_obj_t * uic_fuelslider;
-lv_obj_t * uic_water;
+lv_obj_t * uic_fuel;
+lv_obj_t * uic_fuelscale;
+lv_obj_t * uic_parkingbrake;
+lv_obj_t * uic_turnsignal;
+lv_obj_t * uic_watertemp;
 lv_obj_t * uic_checkengine;
-lv_obj_t * uic_rpmslider;
 lv_obj_t * ui_Screen1 = NULL;
 lv_obj_t * ui_TopPanel = NULL;
 lv_obj_t * ui_RPM = NULL;
@@ -20,22 +20,13 @@ lv_obj_t * ui_rpmslider = NULL;
 lv_obj_t * ui_rpmscale = NULL;
 lv_obj_t * ui_Speed = NULL;
 lv_obj_t * ui_checkengine = NULL;
-lv_obj_t * ui_water = NULL;
-lv_obj_t * ui_fuel = NULL;
-lv_obj_t * ui_fuel2 = NULL;
-lv_obj_t * ui_fuelslider = NULL;
-lv_obj_t * ui_dsc = NULL;
-lv_obj_t * ui_parkingbrake = NULL;
+lv_obj_t * ui_watertemp = NULL;
 lv_obj_t * ui_turnsignal = NULL;
+lv_obj_t * ui_parkingbrake = NULL;
+lv_obj_t * ui_fuelscale = NULL;
+lv_obj_t * ui_fuel = NULL;
+lv_obj_t * ui_fuelslider = NULL;
 // event funtions
-void ui_event_Screen1(lv_event_t * e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    if(event_code == LV_EVENT_CLICKED) {
-        _ui_opacity_set(ui_turnsignal, 0);
-    }
-}
 
 // build funtions
 
@@ -128,7 +119,7 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_text_align(ui_Speed, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_Speed, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_checkengine = lv_img_create(ui_Screen1);
+    ui_checkengine = lv_img_create(ui_TopPanel);
     lv_img_set_src(ui_checkengine, &ui_img_checkengine_png);
     lv_obj_set_width(ui_checkengine, 100);
     lv_obj_set_height(ui_checkengine, 100);
@@ -139,48 +130,70 @@ void ui_Screen1_screen_init(void)
     lv_obj_clear_flag(ui_checkengine, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_opa(ui_checkengine, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_water = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_water, &ui_img_watertemp_png);
-    lv_obj_set_width(ui_water, 100);
-    lv_obj_set_height(ui_water, 100);
-    lv_obj_set_x(ui_water, -342);
-    lv_obj_set_y(ui_water, -182);
-    lv_obj_set_align(ui_water, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_water, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_water, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_opa(ui_water, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_watertemp = lv_img_create(ui_TopPanel);
+    lv_img_set_src(ui_watertemp, &ui_img_watertemp_png);
+    lv_obj_set_width(ui_watertemp, 100);
+    lv_obj_set_height(ui_watertemp, 100);
+    lv_obj_set_x(ui_watertemp, -342);
+    lv_obj_set_y(ui_watertemp, -182);
+    lv_obj_set_align(ui_watertemp, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_watertemp, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_watertemp, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_img_recolor(ui_watertemp, lv_color_hex(0x4040FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_img_recolor_opa(ui_watertemp, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_opa(ui_watertemp, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_fuel = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_fuel, &ui_img_322054780);
+    ui_turnsignal = lv_img_create(ui_TopPanel);
+    lv_img_set_src(ui_turnsignal, &ui_img_turnsignal_png);
+    lv_obj_set_width(ui_turnsignal, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_turnsignal, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_turnsignal, 0);
+    lv_obj_set_y(ui_turnsignal, 195);
+    lv_obj_set_align(ui_turnsignal, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_turnsignal, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_turnsignal, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_opa(ui_turnsignal, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_parkingbrake = lv_img_create(ui_TopPanel);
+    lv_img_set_src(ui_parkingbrake, &ui_img_parkingbrake_png);
+    lv_obj_set_width(ui_parkingbrake, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_parkingbrake, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_parkingbrake, 345);
+    lv_obj_set_y(ui_parkingbrake, 201);
+    lv_obj_set_align(ui_parkingbrake, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_parkingbrake, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_parkingbrake, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_opa(ui_parkingbrake, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_fuelscale = lv_img_create(ui_TopPanel);
+    lv_img_set_src(ui_fuelscale, &ui_img_322054780);
+    lv_obj_set_width(ui_fuelscale, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_fuelscale, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_fuelscale, 316);
+    lv_obj_set_y(ui_fuelscale, -220);
+    lv_obj_set_align(ui_fuelscale, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_fuelscale, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_fuelscale, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+
+    ui_fuel = lv_img_create(ui_TopPanel);
+    lv_img_set_src(ui_fuel, &ui_img_fuel_png);
     lv_obj_set_width(ui_fuel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_fuel, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_fuel, 312);
-    lv_obj_set_y(ui_fuel, -218);
+    lv_obj_set_x(ui_fuel, 313);
+    lv_obj_set_y(ui_fuel, -193);
     lv_obj_set_align(ui_fuel, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_fuel, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
     lv_obj_clear_flag(ui_fuel, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
-    ui_fuel2 = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_fuel2, &ui_img_fuel_png);
-    lv_obj_set_width(ui_fuel2, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_fuel2, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_fuel2, 313);
-    lv_obj_set_y(ui_fuel2, -168);
-    lv_obj_set_align(ui_fuel2, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_fuel2, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_fuel2, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-
     ui_fuelslider = lv_slider_create(ui_Screen1);
-    lv_slider_set_value(ui_fuelslider, 75, LV_ANIM_OFF);
+    lv_slider_set_value(ui_fuelslider, 25, LV_ANIM_OFF);
     if(lv_slider_get_mode(ui_fuelslider) == LV_SLIDER_MODE_RANGE) lv_slider_set_left_value(ui_fuelslider, 100, LV_ANIM_OFF);
-    lv_obj_set_width(ui_fuelslider, 148);
-    lv_obj_set_height(ui_fuelslider, 33);
-    lv_obj_set_x(ui_fuelslider, 306);
-    lv_obj_set_y(ui_fuelslider, -171);
+    lv_obj_set_width(ui_fuelslider, 146);
+    lv_obj_set_height(ui_fuelslider, 31);
+    lv_obj_set_x(ui_fuelslider, 307);
+    lv_obj_set_y(ui_fuelslider, -178);
     lv_obj_set_align(ui_fuelslider, LV_ALIGN_CENTER);
     lv_obj_set_style_radius(ui_fuelslider, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_fuelslider, lv_color_hex(0x414141), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_fuelslider, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_style_radius(ui_fuelslider, 0, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_fuelslider, lv_color_hex(0xEED629), LV_PART_INDICATOR | LV_STATE_DEFAULT);
@@ -189,48 +202,13 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_bg_color(ui_fuelslider, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_fuelslider, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
-    ui_dsc = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_dsc, &ui_img_dcs_png);
-    lv_obj_set_width(ui_dsc, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_dsc, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_dsc, 334);
-    lv_obj_set_y(ui_dsc, 188);
-    lv_obj_set_align(ui_dsc, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_dsc, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_dsc, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_opa(ui_dsc, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_parkingbrake = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_parkingbrake, &ui_img_parkingbrake_png);
-    lv_obj_set_width(ui_parkingbrake, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_parkingbrake, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_parkingbrake, -230);
-    lv_obj_set_y(ui_parkingbrake, -182);
-    lv_obj_set_align(ui_parkingbrake, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_parkingbrake, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_parkingbrake, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_opa(ui_parkingbrake, 75, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_turnsignal = lv_imgbtn_create(ui_Screen1);
-    lv_imgbtn_set_src(ui_turnsignal, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_turnsignal_png, NULL);
-    lv_imgbtn_set_src(ui_turnsignal, LV_IMGBTN_STATE_PRESSED, NULL, &ui_img_turnsignal_png, NULL);
-    lv_obj_set_width(ui_turnsignal, 177);
-    lv_obj_set_height(ui_turnsignal, 74);
-    lv_obj_set_x(ui_turnsignal, -5);
-    lv_obj_set_y(ui_turnsignal, 188);
-    lv_obj_set_align(ui_turnsignal, LV_ALIGN_CENTER);
-    lv_obj_set_style_opa(ui_turnsignal, 40, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_img_recolor(ui_turnsignal, lv_color_hex(0xEF1414), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_img_recolor_opa(ui_turnsignal, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_add_event_cb(ui_Screen1, ui_event_Screen1, LV_EVENT_ALL, NULL);
-    uic_rpmslider = ui_rpmslider;
     uic_checkengine = ui_checkengine;
-    uic_water = ui_water;
-    uic_fuelslider = ui_fuelslider;
-    uic_dsc = ui_dsc;
-    uic_parkingbrake = ui_parkingbrake;
+    uic_watertemp = ui_watertemp;
     uic_turnsignal = ui_turnsignal;
+    uic_parkingbrake = ui_parkingbrake;
+    uic_fuelscale = ui_fuelscale;
+    uic_fuel = ui_fuel;
+    uic_fuelslider = ui_fuelslider;
 
 }
 
@@ -243,23 +221,22 @@ void ui_Screen1_screen_destroy(void)
     ui_TopPanel = NULL;
     ui_RPM = NULL;
     ui_rpmbg = NULL;
-    uic_rpmslider = NULL;
     ui_rpmslider = NULL;
     ui_rpmscale = NULL;
     ui_Speed = NULL;
     uic_checkengine = NULL;
     ui_checkengine = NULL;
-    uic_water = NULL;
-    ui_water = NULL;
-    ui_fuel = NULL;
-    ui_fuel2 = NULL;
-    uic_fuelslider = NULL;
-    ui_fuelslider = NULL;
-    uic_dsc = NULL;
-    ui_dsc = NULL;
-    uic_parkingbrake = NULL;
-    ui_parkingbrake = NULL;
+    uic_watertemp = NULL;
+    ui_watertemp = NULL;
     uic_turnsignal = NULL;
     ui_turnsignal = NULL;
+    uic_parkingbrake = NULL;
+    ui_parkingbrake = NULL;
+    uic_fuelscale = NULL;
+    ui_fuelscale = NULL;
+    uic_fuel = NULL;
+    ui_fuel = NULL;
+    uic_fuelslider = NULL;
+    ui_fuelslider = NULL;
 
 }

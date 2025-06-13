@@ -13,7 +13,6 @@ extern "C" {
 // SCREEN: ui_Screen1
 extern void ui_Screen1_screen_init(void);
 extern void ui_Screen1_screen_destroy(void);
-extern void ui_event_Screen1(lv_event_t * e);
 extern lv_obj_t * ui_Screen1;
 extern lv_obj_t * ui_TopPanel;
 extern lv_obj_t * ui_RPM;
@@ -22,21 +21,20 @@ extern lv_obj_t * ui_rpmslider;
 extern lv_obj_t * ui_rpmscale;
 extern lv_obj_t * ui_Speed;
 extern lv_obj_t * ui_checkengine;
-extern lv_obj_t * ui_water;
-extern lv_obj_t * ui_fuel;
-extern lv_obj_t * ui_fuel2;
-extern lv_obj_t * ui_fuelslider;
-extern lv_obj_t * ui_dsc;
-extern lv_obj_t * ui_parkingbrake;
+extern lv_obj_t * ui_watertemp;
 extern lv_obj_t * ui_turnsignal;
+extern lv_obj_t * ui_parkingbrake;
+extern lv_obj_t * ui_fuelscale;
+extern lv_obj_t * ui_fuel;
+extern lv_obj_t * ui_fuelslider;
 // CUSTOM VARIABLES
-extern lv_obj_t * uic_rpmslider;
 extern lv_obj_t * uic_checkengine;
-extern lv_obj_t * uic_water;
-extern lv_obj_t * uic_fuelslider;
-extern lv_obj_t * uic_dsc;
-extern lv_obj_t * uic_parkingbrake;
+extern lv_obj_t * uic_watertemp;
 extern lv_obj_t * uic_turnsignal;
+extern lv_obj_t * uic_parkingbrake;
+extern lv_obj_t * uic_fuelscale;
+extern lv_obj_t * uic_fuel;
+extern lv_obj_t * uic_fuelslider;
 
 #ifdef __cplusplus
 } /*extern "C"*/

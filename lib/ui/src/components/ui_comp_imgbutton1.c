@@ -25,8 +25,6 @@ lv_obj_t * ui_ImgButton1_create(lv_obj_t * comp_parent)
 
     lv_obj_t * cui_ImgButton1;
     cui_ImgButton1 = lv_imgbtn_create(comp_parent);
-    lv_imgbtn_set_src(cui_ImgButton1, LV_IMGBTN_STATE_RELEASED, NULL, &ui_img_turnsignal_png, NULL);
-    lv_imgbtn_set_src(cui_ImgButton1, LV_IMGBTN_STATE_PRESSED, NULL, &ui_img_turnsignal_png, NULL);
     lv_obj_set_width(cui_ImgButton1, 177);
     lv_obj_set_height(cui_ImgButton1, 74);
     lv_obj_set_x(cui_ImgButton1, -5);
