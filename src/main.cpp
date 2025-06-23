@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 
 /**
@@ -52,20 +51,13 @@ extern lv_obj_t *ui_parkingbrake;
 #define I2C_MASTER_SDA_IO 8
 #define I2C_MASTER_SCL_IO 9
 
-/**
-/* To use the built-in examples and demos of LVGL uncomment the includes below respectively.
- * You also need to copy `lvgl/examples` to `lvgl/src/examples`. Similarly for the demos `lvgl/demos` to `lvgl/src/demos`.
- */
-// #include <demos/lv_demos.h>
-// #include <examples/lv_examples.h>
-
 /* LVGL porting configurations */
 #define LVGL_TICK_PERIOD_MS     (2)
-#define LVGL_TASK_MAX_DELAY_MS  (500)
-#define LVGL_TASK_MIN_DELAY_MS  (1)
-#define LVGL_TASK_STACK_SIZE    (4 * 1024)
-#define LVGL_TASK_PRIORITY      (2)
-#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 20)
+#define LVGL_TASK_MAX_DELAY_MS  (100)
+#define LVGL_TASK_MIN_DELAY_MS  (5)
+#define LVGL_TASK_STACK_SIZE    (6 * 1024)
+#define LVGL_TASK_PRIORITY      (3)
+#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 100) // Reduced to 100 lines per buffer
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -90,11 +82,11 @@ typedef struct {
   uint8_t vehicleSpeed : 5;
 } CanData;
 
-CanData receivedData; // Variable to store received data
-volatile bool dataReceived = false; // Flag to indicate new data
+CanData receivedData;
+volatile bool dataReceived = false;
 
 ESP_Panel *panel = NULL;
-SemaphoreHandle_t lvgl_mux = NULL; // LVGL mutex
+SemaphoreHandle_t lvgl_mux = NULL;
 
 #if ESP_PANEL_LCD_BUS_TYPE == ESP_PANEL_BUS_TYPE_RGB
 /* Display flushing */
@@ -123,19 +115,14 @@ bool notify_lvgl_flush_ready(void *user_ctx)
 void lvgl_port_tp_read(lv_indev_drv_t * indev, lv_indev_data_t * data)
 {
     panel->getLcdTouch()->readData();
-
     bool touched = panel->getLcdTouch()->getTouchState();
     if(!touched) {
         data->state = LV_INDEV_STATE_REL;
     } else {
         TouchPoint point = panel->getLcdTouch()->getPoint();
-
         data->state = LV_INDEV_STATE_PR;
-        /*Set the coordinates*/
         data->point.x = point.x;
         data->point.y = point.y;
-
-        Serial.printf("Touch point: x %d, y %d\n", point.x, point.y);
     }
 }
 #endif
@@ -154,41 +141,35 @@ void lvgl_port_unlock(void)
 void lvgl_port_task(void *arg)
 {
     Serial.println("Starting LVGL task");
-
-    uint32_t task_delay_ms = LVGL_TASK_MAX_DELAY_MS;
     while (1) {
-        // Lock the mutex due to the LVGL APIs are not thread-safe
         lvgl_port_lock(-1);
-        task_delay_ms = lv_timer_handler();
-        // Release the mutex
+        lv_timer_handler();
         lvgl_port_unlock();
-        if (task_delay_ms > LVGL_TASK_MAX_DELAY_MS) {
-            task_delay_ms = LVGL_TASK_MAX_DELAY_MS;
-        } else if (task_delay_ms < LVGL_TASK_MIN_DELAY_MS) {
-            task_delay_ms = LVGL_TASK_MIN_DELAY_MS;
-        }
-        vTaskDelay(pdMS_TO_TICKS(task_delay_ms));
+        vTaskDelay(pdMS_TO_TICKS(16));
     }
 }
 
 /* ESP-NOW callback function */
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     memcpy(&receivedData, incomingData, sizeof(receivedData));
-    Serial.printf("Received ESP-NOW data: RPM=%u, Coolant=%u, Speed=%u, Fuel=%u, Handbrake=%u\n",
-                  receivedData.rpm, receivedData.coolantTemp, receivedData.vehicleSpeed, receivedData.fuelTankLevel, receivedData.handbrakeSwitch);
-    dataReceived = true; // Set flag to update UI
+    dataReceived = true;
 }
 
 void setup()
 {
-    Serial.begin(115200); /* prepare for possible serial debug */
+    Serial.begin(115200);
     delay(3000);       
 
     String LVGL_Arduino = "Hello LVGL! ";
     LVGL_Arduino += String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch();
-
     Serial.println(LVGL_Arduino);
     Serial.println("I am ESP32_Display_Panel");
+
+    /* Log free memory before allocations */
+    Serial.printf("Free SRAM: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    #ifdef CONFIG_SPIRAM
+    Serial.printf("Free PSRAM: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    #endif
 
     /* Initialize WiFi for ESP-NOW */
     WiFi.mode(WIFI_STA);
@@ -211,16 +192,29 @@ void setup()
 
     /* Initialize LVGL buffers */
     static lv_disp_draw_buf_t draw_buf;
-    /* Using double buffers is more faster than single buffer */
-    /* Using internal SRAM is more fast than PSRAM (Note: Memory allocated using `malloc` may be located in PSRAM.) */
-    uint8_t *buf = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
-    assert(buf);
-    lv_disp_draw_buf_init(&draw_buf, buf, NULL, LVGL_BUF_SIZE);
+    /* Try double buffering with smaller buffers */
+    uint8_t *buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
+    uint8_t *buf2 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
+    
+    if (buf1 && buf2) {
+        Serial.println("Double buffering enabled");
+        lv_disp_draw_buf_init(&draw_buf, buf1, buf2, LVGL_BUF_SIZE);
+    } else {
+        Serial.println("Double buffering failed, falling back to single buffering");
+        if (buf1) heap_caps_free(buf1); // Free buf1 if allocated
+        if (buf2) heap_caps_free(buf2); // Free buf2 if allocated
+        /* Allocate single buffer */
+        buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
+        if (!buf1) {
+            Serial.println("Failed to allocate even single LVGL buffer");
+            while (1); // Halt on failure
+        }
+        lv_disp_draw_buf_init(&draw_buf, buf1, NULL, LVGL_BUF_SIZE);
+    }
 
     /* Initialize the display device */
     static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
-    /* Change the following line to your display resolution */
     disp_drv.hor_res = ESP_PANEL_LCD_H_RES;
     disp_drv.ver_res = ESP_PANEL_LCD_V_RES;
     disp_drv.flush_cb = lvgl_port_disp_flush;
@@ -238,16 +232,9 @@ void setup()
     /* Initialize bus and device of panel */
     panel->init();
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
-    /* Register a function to notify LVGL when the panel is ready to flush */
-    /* This is useful for refreshing the screen using DMA transfers */
     panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
 #endif
 
-    /**
-     * These development boards require the use of an IO expander to configure the screen,
-     * so it needs to be initialized in advance and registered with the panel for use.
-     *
-     */
     Serial.println("Initialize IO expander");
     ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000);
     expander->init();
@@ -255,9 +242,7 @@ void setup()
     expander->multiPinMode(TP_RST | LCD_BL | LCD_RST | SD_CS | USB_SEL, OUTPUT);
     expander->multiDigitalWrite(TP_RST | LCD_BL | LCD_RST | SD_CS, HIGH);
 
-    // Turn off backlight
     expander->digitalWrite(USB_SEL, LOW);
-    /* Add into panel */
     panel->addIOExpander(expander);
 
     /* Start panel */
@@ -267,12 +252,8 @@ void setup()
     lvgl_mux = xSemaphoreCreateRecursiveMutex();
     xTaskCreate(lvgl_port_task, "lvgl", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL);
 
-    /* Lock the mutex due to the LVGL APIs are not thread-safe */
     lvgl_port_lock(-1);
-
     ui_init();
-
-    /* Release the mutex */
     lvgl_port_unlock();
 
     Serial.println("Setup done");
@@ -280,15 +261,12 @@ void setup()
 
 void loop()
 {
-    // Update UI elements when new data is received
     if (dataReceived) {
-        lvgl_port_lock(-1); // Lock LVGL mutex
-        // Update RPM slider
+        lvgl_port_lock(-1);
         lv_arc_set_value(ui_rpmslider, receivedData.rpm);
-        // Update parking brake icon opacity
         lv_obj_set_style_img_recolor_opa(ui_parkingbrake, receivedData.handbrakeSwitch ? 0 : 200, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lvgl_port_unlock(); // Unlock LVGL mutex
-        dataReceived = false; // Reset flag
+        lvgl_port_unlock();
+        dataReceived = false;
     }
-    sleep(1);
+    vTaskDelay(pdMS_TO_TICKS(50));
 }
