@@ -231,6 +231,7 @@ void setup()
 #endif
     /* Initialize bus and device of panel */
     panel->init();
+    panel->getLcd()->setTiming(800, 480, 4, 8, 8, 4, 8, 8, 16000000);
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
     panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
 #endif
