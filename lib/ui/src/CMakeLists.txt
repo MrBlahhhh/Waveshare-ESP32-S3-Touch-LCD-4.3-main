@@ -1,8 +1,8 @@
-SET(SOURCES ui_Screen1.c
+SET(SOURCES ui_comp_rpmslider.c
+    ui_comp.c
+    ui_Screen1.c
     ui.c
     ui_comp_hook.c
-    ui_helpers.c
-    ui_img_rpmbackground_png.c
-    ui_img_rpmdial_png.c)
+    ui_helpers.c)
 
 add_library(ui ${SOURCES})

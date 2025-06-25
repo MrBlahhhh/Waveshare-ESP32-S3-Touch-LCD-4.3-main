@@ -23,6 +23,8 @@ extern "C" {
 #endif
 
 #include "ui_helpers.h"
+#include "ui_comp.h"
+#include "ui_comp_hook.h"
 #include "ui_events.h"
 
 ///////////////////// SCREENS ////////////////////
@@ -35,10 +37,6 @@ extern "C" {
 // EVENTS
 
 extern lv_obj_t * ui____initial_actions0;
-
-// IMAGES AND IMAGE SETS
-LV_IMG_DECLARE(ui_img_rpmbackground_png);    // assets/rpmbackground.png
-LV_IMG_DECLARE(ui_img_rpmdial_png);    // assets/rpmdial.png
 
 // UI INIT
 void ui_init(void);

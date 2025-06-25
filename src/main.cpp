@@ -1,33 +1,4 @@
 #include <Arduino.h>
-
-/**
- * The example demonstrates how to port LVGL 9.1.0.
- *
- * ## How to Use
- *
- * To use this example, please firstly install `ESP32_Display_Panel` (including its dependent libraries) and
- * `lvgl` (v9.1.0) libraries, then follow the steps to configure them:
- *
- * 1. [Configure ESP32_Display_Panel](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-esp32_display_panel)
- * 2. [Configure LVGL](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-lvgl)
- * 3. [Configure Board](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-board)
- *
- * ## Example Output
- *
- * ```bash
- * ...
- * Hello LVGL! V9.1.0
- * I am ESP32_Display_Panel
- * Starting LVGL task
- * Setup done
- * Loop
- * Loop
- * Loop
- * Loop
- * ...
- * ```
- */
-
 #include <lvgl.h>
 #include <ESP_Panel_Library.h>
 #include <ESP_IOExpander_Library.h>
@@ -37,7 +8,6 @@
 
 // Declare UI objects from ui_screen1.c
 extern lv_obj_t *ui_rpmslider;
-extern lv_obj_t *ui_parkingbrake;
 
 // Extend IO Pin define
 #define TP_RST 1
@@ -57,7 +27,7 @@ extern lv_obj_t *ui_parkingbrake;
 #define LVGL_TASK_MIN_DELAY_MS  (5)
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
 #define LVGL_TASK_PRIORITY      (3)
-#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 100) // Reduced to 100 lines per buffer
+#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 40)
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -87,6 +57,16 @@ volatile bool dataReceived = false;
 
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;
+
+/* Debug logging macro */
+#define ESPNOW_DEBUG Serial.printf
+
+/* FPS label (fallback) */
+static lv_obj_t *fps_label = NULL;
+
+/* Manual FPS counter variables */
+static volatile uint32_t frame_count = 0;
+static uint32_t last_fps = 0;
 
 /* Display flushing */
 void lvgl_port_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
@@ -129,15 +109,44 @@ void lvgl_port_task(void *arg)
     while (1) {
         lvgl_port_lock(-1);
         lv_timer_handler();
+        frame_count++; // Increment frame count for manual FPS
         lvgl_port_unlock();
         vTaskDelay(pdMS_TO_TICKS(16));
     }
 }
 
-/* ESP-NOW callback function */
+/* ESP-NOW callback function with debugging */
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-    memcpy(&receivedData, incomingData, sizeof(receivedData));
+    ESPNOW_DEBUG("ESP-NOW: Data received, length: %d bytes\n", len);
+    if (len != sizeof(CanData)) {
+        ESPNOW_DEBUG("ESP-NOW: Error: Invalid data length, expected %d, got %d\n", sizeof(CanData), len);
+        return;
+    }
+
+    memcpy(&receivedData, incomingData, sizeof(CanData));
+    ESPNOW_DEBUG("ESP-NOW: Received RPM: %u, Coolant Temp: %u, Vehicle Speed: %u\n",
+                 receivedData.rpm, receivedData.coolantTemp, receivedData.vehicleSpeed);
+    ESPNOW_DEBUG("ESP-NOW: Source MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    
     dataReceived = true;
+}
+
+/* FPS update callback for fallback label */
+static void fps_update_cb(lv_timer_t *timer)
+{
+    if (fps_label) {
+        // Calculate FPS based on frame_count over 1 second
+        uint32_t fps = frame_count;
+        frame_count = 0; // Reset for next second
+        char buf[16];
+        snprintf(buf, sizeof(buf), "FPS: %lu", fps);
+        lv_label_set_text(fps_label, buf);
+        if (fps != last_fps) {
+            ESPNOW_DEBUG("Manual FPS: %lu\n", fps);
+            last_fps = fps;
+        }
+    }
 }
 
 void setup()
@@ -157,23 +166,38 @@ void setup()
     #endif
 
     /* Initialize WiFi for ESP-NOW */
+    ESPNOW_DEBUG("ESP-NOW: Initializing WiFi in STA mode\n");
     WiFi.mode(WIFI_STA);
-    Serial.println("WiFi MAC Address: ");
-    Serial.println(WiFi.macAddress());
+    ESPNOW_DEBUG("ESP-NOW: WiFi MAC Address: %s\n", WiFi.macAddress().c_str());
 
     /* Initialize ESP-NOW */
-    if (esp_now_init() != ESP_OK) {
-        Serial.println("Error initializing ESP-NOW");
+    ESPNOW_DEBUG("ESP-NOW: Initializing ESP-NOW\n");
+    esp_err_t init_result = esp_now_init();
+    if (init_result != ESP_OK) {
+        ESPNOW_DEBUG("ESP-NOW: Error initializing ESP-NOW: %s (0x%x)\n", 
+                     esp_err_to_name(init_result), init_result);
         return;
     }
+    ESPNOW_DEBUG("ESP-NOW: Initialization successful\n");
 
     /* Register ESP-NOW receive callback */
-    esp_now_register_recv_cb(OnDataRecv);
+    ESPNOW_DEBUG("ESP-NOW: Registering receive callback\n");
+    esp_err_t cb_result = esp_now_register_recv_cb(OnDataRecv);
+    if (cb_result != ESP_OK) {
+        ESPNOW_DEBUG("ESP-NOW: Error registering callback: %s (0x%x)\n", 
+                     esp_err_to_name(cb_result), cb_result);
+        return;
+    }
+    ESPNOW_DEBUG("ESP-NOW: Receive callback registered\n");
 
     panel = new ESP_Panel();
 
     /* Initialize LVGL core */
     lv_init();
+
+    /* Initialize system monitor for default FPS display */
+    _lv_sysmon_builtin_init();
+    Serial.println("LVGL system monitor initialized");
 
     /* Initialize LVGL buffers */
     uint8_t *buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
@@ -185,12 +209,12 @@ void setup()
         lv_display_set_buffers(disp, buf1, buf2, LVGL_BUF_SIZE, LV_DISP_RENDER_MODE_PARTIAL);
     } else {
         Serial.println("Double buffering failed, falling back to single buffering");
-        if (buf1) heap_caps_free(buf1); // Free buf1 if allocated
-        if (buf2) heap_caps_free(buf2); // Free buf2 if allocated
+        if (buf1) heap_caps_free(buf1);
+        if (buf2) heap_caps_free(buf2);
         buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
         if (!buf1) {
             Serial.println("Failed to allocate even single LVGL buffer");
-            while (1); // Halt on failure
+            while (1);
         }
         lv_display_set_buffers(disp, buf1, NULL, LVGL_BUF_SIZE, LV_DISP_RENDER_MODE_PARTIAL);
     }
@@ -230,7 +254,30 @@ void setup()
     xTaskCreate(lvgl_port_task, "lvgl", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL);
 
     lvgl_port_lock(-1);
+    // Comment out ui_init() temporarily to test if default FPS counter appears
     ui_init();
+    // Verify ui_rpmslider is initialized
+    if (ui_rpmslider == NULL) {
+        Serial.println("ERROR: ui_rpmslider is NULL, check ui_init()");
+        while (1); // Halt to indicate critical error
+    } else {
+        Serial.println("ui_rpmslider initialized successfully");
+        // Set arc range (adjust as needed for your RPM range)
+        lv_arc_set_range(ui_rpmslider, 0, 8000);
+        lv_arc_set_value(ui_rpmslider, 0); // Initialize to 0
+    }
+
+    // Create fallback FPS label
+    fps_label = lv_label_create(lv_screen_active());
+    lv_label_set_text(fps_label, "FPS: --");
+    lv_obj_set_pos(fps_label, 10, 10); // Top-left corner
+    lv_obj_set_style_text_color(fps_label, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(fps_label, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(fps_label, LV_OPA_50, 0);
+    // Create timer to update FPS
+    lv_timer_create(fps_update_cb, 1000, NULL); // Update every 1 second
+    Serial.println("Fallback FPS label created");
+
     lvgl_port_unlock();
 
     Serial.println("Setup done");
@@ -240,10 +287,15 @@ void loop()
 {
     if (dataReceived) {
         lvgl_port_lock(-1);
+        // Debug the RPM value being set
+        ESPNOW_DEBUG("LVGL: Setting ui_rpmslider to RPM: %u\n", receivedData.rpm);
         lv_arc_set_value(ui_rpmslider, receivedData.rpm);
-        lv_obj_set_style_img_recolor_opa(ui_parkingbrake, receivedData.handbrakeSwitch ? 0 : 200, LV_PART_MAIN | LV_STATE_DEFAULT);
+        // Force display refresh
+        lv_refr_now(NULL);
         lvgl_port_unlock();
+        ESPNOW_DEBUG("ESP-NOW: Updated RPM slider to %u\n", receivedData.rpm);
         dataReceived = false;
     }
-    vTaskDelay(pdMS_TO_TICKS(50));
+
+    vTaskDelay(pdMS_TO_TICKS(10)); // Reduced delay for faster updates
 }

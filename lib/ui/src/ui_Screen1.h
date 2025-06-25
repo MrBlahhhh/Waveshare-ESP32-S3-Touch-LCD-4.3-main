@@ -14,11 +14,7 @@ extern "C" {
 extern void ui_Screen1_screen_init(void);
 extern void ui_Screen1_screen_destroy(void);
 extern lv_obj_t * ui_Screen1;
-extern lv_obj_t * ui_TopPanel;
-extern lv_obj_t * ui_RPM;
-extern lv_obj_t * ui_rpmbg;
 extern lv_obj_t * ui_rpmslider;
-extern lv_obj_t * ui_rpmscale;
 // CUSTOM VARIABLES
 extern lv_obj_t * uic_rpmslider;
 
