@@ -1,0 +1,310 @@
+{
+  "guid": "GUID12132928-24166S364161",
+  "deepid": 1957365185,
+  "dont_export": false,
+  "locked": false,
+  "properties": [
+    {
+      "nid": 10,
+      "strtype": "OBJECT/Name",
+      "strval": "ImgButton1",
+      "InheritedType": 10
+    },
+    {
+      "nid": 20,
+      "strtype": "OBJECT/Layout",
+      "InheritedType": 1
+    },
+    {
+      "Flow": 0,
+      "Wrap": false,
+      "Reversed": false,
+      "MainAlignment": 0,
+      "CrossAlignment": 0,
+      "TrackAlignment": 0,
+      "LayoutType": 0,
+      "nid": 30,
+      "strtype": "OBJECT/Layout_type",
+      "strval": "No_layout",
+      "InheritedType": 13
+    },
+    {
+      "nid": 40,
+      "strtype": "OBJECT/Transform",
+      "InheritedType": 1
+    },
+    {
+      "nid": 50,
+      "flags": 17,
+      "strtype": "OBJECT/Position",
+      "intarray": [
+        -5,
+        188
+      ],
+      "InheritedType": 7
+    },
+    {
+      "nid": 60,
+      "flags": 17,
+      "strtype": "OBJECT/Size",
+      "intarray": [
+        177,
+        74
+      ],
+      "InheritedType": 7
+    },
+    {
+      "nid": 70,
+      "strtype": "OBJECT/Align",
+      "strval": "CENTER",
+      "InheritedType": 3
+    },
+    {
+      "nid": 90,
+      "flags": 1048576,
+      "strtype": "OBJECT/Flags",
+      "InheritedType": 1
+    },
+    {
+      "nid": 225,
+      "flags": 1048576,
+      "strtype": "OBJECT/Scrolling",
+      "InheritedType": 1
+    },
+    {
+      "nid": 300,
+      "strtype": "OBJECT/Scrollbar_mode",
+      "strval": "AUTO",
+      "InheritedType": 3
+    },
+    {
+      "nid": 310,
+      "strtype": "OBJECT/Scroll_direction",
+      "strval": "ALL",
+      "InheritedType": 3
+    },
+    {
+      "nid": 314,
+      "strtype": "OBJECT/Scroll_snap_x",
+      "strval": "NONE",
+      "InheritedType": 3
+    },
+    {
+      "nid": 315,
+      "strtype": "OBJECT/Scroll_snap_y",
+      "strval": "NONE",
+      "InheritedType": 3
+    },
+    {
+      "nid": 320,
+      "flags": 1048576,
+      "strtype": "OBJECT/States",
+      "InheritedType": 1
+    },
+    {
+      "nid": 1010,
+      "strtype": "IMGBUTTON/Images",
+      "InheritedType": 1
+    },
+    {
+      "nid": 1020,
+      "strtype": "IMGBUTTON/Button_state",
+      "strval": "DISABLED",
+      "InheritedType": 3
+    },
+    {
+      "nid": 1030,
+      "strtype": "IMGBUTTON/Image_released",
+      "strval": "assets/turnsignal.png",
+      "InheritedType": 5
+    },
+    {
+      "nid": 1040,
+      "strtype": "IMGBUTTON/Image_pressed",
+      "strval": "assets/turnsignal.png",
+      "InheritedType": 5
+    },
+    {
+      "nid": 1050,
+      "strtype": "IMGBUTTON/Image_disabled",
+      "strval": "",
+      "InheritedType": 5
+    },
+    {
+      "nid": 1060,
+      "strtype": "IMGBUTTON/Image_checked_released",
+      "strval": "",
+      "InheritedType": 5
+    },
+    {
+      "nid": 1070,
+      "strtype": "IMGBUTTON/Image_checked_pressed",
+      "strval": "",
+      "InheritedType": 5
+    },
+    {
+      "nid": 1080,
+      "strtype": "IMGBUTTON/Image_checked_disabled",
+      "strval": "",
+      "InheritedType": 5
+    },
+    {
+      "part": "lv.PART.MAIN",
+      "childs": [
+        {
+          "nid": 10000,
+          "strtype": "_style/StyleState",
+          "strval": "DEFAULT",
+          "childs": [
+            {
+              "nid": 11210,
+              "strtype": "_style/Image_reColor",
+              "intarray": [
+                239,
+                20,
+                20,
+                0
+              ],
+              "InheritedType": 7
+            }
+          ],
+          "InheritedType": 1
+        }
+      ],
+      "nid": 1090,
+      "strtype": "IMGBUTTON/Style_main",
+      "strval": "lv.PART.MAIN, Rectangle, Image, Text, Transform",
+      "InheritedType": 11
+    },
+    {
+      "disabled": false,
+      "nid": 1000628,
+      "strtype": "_event/EventHandler",
+      "strval": "FOCUSED",
+      "childs": [
+        {
+          "nid": 1000629,
+          "strtype": "_event/name",
+          "strval": "Event2",
+          "InheritedType": 10
+        },
+        {
+          "nid": 1000630,
+          "strtype": "_event/condition_C",
+          "strval": "",
+          "InheritedType": 10
+        },
+        {
+          "nid": 1000631,
+          "strtype": "_event/condition_P",
+          "strval": "",
+          "InheritedType": 10
+        },
+        {
+          "nid": 1000632,
+          "strtype": "_event/action",
+          "strval": "SET OPACITY",
+          "childs": [
+            {
+              "nid": 1000633,
+              "strtype": "SET OPACITY/Name",
+              "strval": "SET OPACITY",
+              "InheritedType": 10
+            },
+            {
+              "nid": 1000634,
+              "strtype": "SET OPACITY/Call",
+              "strval": "set_opacity( <{Target}>, <{Value}>)",
+              "InheritedType": 10
+            },
+            {
+              "nid": 1000635,
+              "strtype": "SET OPACITY/CallC",
+              "strval": "_ui_opacity_set( <{Target}>, <{Value}>);",
+              "InheritedType": 10
+            },
+            {
+              "nid": 1000636,
+              "strtype": "SET OPACITY/Target",
+              "strval": "GUID12132928-24166S364161",
+              "InheritedType": 9
+            },
+            {
+              "nid": 1000637,
+              "strtype": "SET OPACITY/Value",
+              "InheritedType": 6
+            }
+          ],
+          "InheritedType": 10
+        }
+      ],
+      "InheritedType": 4
+    },
+    {
+      "disabled": false,
+      "nid": 1000661,
+      "strtype": "_event/EventHandler",
+      "strval": "DEFOCUSED",
+      "childs": [
+        {
+          "nid": 1000662,
+          "strtype": "_event/name",
+          "strval": "Event3",
+          "InheritedType": 10
+        },
+        {
+          "nid": 1000663,
+          "strtype": "_event/condition_C",
+          "strval": "",
+          "InheritedType": 10
+        },
+        {
+          "nid": 1000664,
+          "strtype": "_event/condition_P",
+          "strval": "",
+          "InheritedType": 10
+        },
+        {
+          "nid": 1000665,
+          "strtype": "_event/action",
+          "strval": "SET OPACITY",
+          "childs": [
+            {
+              "nid": 1000666,
+              "strtype": "SET OPACITY/Name",
+              "strval": "SET OPACITY",
+              "InheritedType": 10
+            },
+            {
+              "nid": 1000667,
+              "strtype": "SET OPACITY/Call",
+              "strval": "set_opacity( <{Target}>, <{Value}>)",
+              "InheritedType": 10
+            },
+            {
+              "nid": 1000668,
+              "strtype": "SET OPACITY/CallC",
+              "strval": "_ui_opacity_set( <{Target}>, <{Value}>);",
+              "InheritedType": 10
+            },
+            {
+              "nid": 1000669,
+              "strtype": "SET OPACITY/Target",
+              "strval": "GUID12132928-24166S364161",
+              "InheritedType": 9
+            },
+            {
+              "nid": 1000670,
+              "strtype": "SET OPACITY/Value",
+              "integer": 100,
+              "InheritedType": 6
+            }
+          ],
+          "InheritedType": 10
+        }
+      ],
+      "InheritedType": 4
+    }
+  ],
+  "saved_objtypeKey": "IMGBUTTON"
+}

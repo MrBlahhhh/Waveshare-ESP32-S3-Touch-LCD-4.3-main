@@ -1,12 +1,12 @@
 #include <Arduino.h>
 
 /**
- * The example demonstrates how to port LVGL.
+ * The example demonstrates how to port LVGL 9.1.0.
  *
  * ## How to Use
  *
  * To use this example, please firstly install `ESP32_Display_Panel` (including its dependent libraries) and
- * `lvgl` (v8.3.x) libraries, then follow the steps to configure them:
+ * `lvgl` (v9.1.0) libraries, then follow the steps to configure them:
  *
  * 1. [Configure ESP32_Display_Panel](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-esp32_display_panel)
  * 2. [Configure LVGL](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-lvgl)
@@ -16,7 +16,7 @@
  *
  * ```bash
  * ...
- * Hello LVGL! V8.3.8
+ * Hello LVGL! V9.1.0
  * I am ESP32_Display_Panel
  * Starting LVGL task
  * Setup done
@@ -88,39 +88,24 @@ volatile bool dataReceived = false;
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;
 
-#if ESP_PANEL_LCD_BUS_TYPE == ESP_PANEL_BUS_TYPE_RGB
 /* Display flushing */
-void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
+void lvgl_port_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
 {
-    panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
-    lv_disp_flush_ready(disp);
+    panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, (lv_color_t *)color_p);
+    lv_display_flush_ready(disp);
 }
-#else
-/* Display flushing */
-void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
-{
-    panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
-}
-
-bool notify_lvgl_flush_ready(void *user_ctx)
-{
-    lv_disp_drv_t *disp_driver = (lv_disp_drv_t *)user_ctx;
-    lv_disp_flush_ready(disp_driver);
-    return false;
-}
-#endif /* ESP_PANEL_LCD_BUS_TYPE */
 
 #if ESP_PANEL_USE_LCD_TOUCH
 /* Read the touchpad */
-void lvgl_port_tp_read(lv_indev_drv_t * indev, lv_indev_data_t * data)
+void lvgl_port_tp_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
     panel->getLcdTouch()->readData();
     bool touched = panel->getLcdTouch()->getTouchState();
-    if(!touched) {
-        data->state = LV_INDEV_STATE_REL;
+    if (!touched) {
+        data->state = LV_INDEV_STATE_RELEASED;
     } else {
         TouchPoint point = panel->getLcdTouch()->getPoint();
-        data->state = LV_INDEV_STATE_PR;
+        data->state = LV_INDEV_STATE_PRESSED;
         data->point.x = point.x;
         data->point.y = point.y;
     }
@@ -191,49 +176,40 @@ void setup()
     lv_init();
 
     /* Initialize LVGL buffers */
-    static lv_disp_draw_buf_t draw_buf;
-    /* Try double buffering with smaller buffers */
     uint8_t *buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
     uint8_t *buf2 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
     
+    lv_display_t *disp = lv_display_create(ESP_PANEL_LCD_H_RES, ESP_PANEL_LCD_V_RES);
     if (buf1 && buf2) {
         Serial.println("Double buffering enabled");
-        lv_disp_draw_buf_init(&draw_buf, buf1, buf2, LVGL_BUF_SIZE);
+        lv_display_set_buffers(disp, buf1, buf2, LVGL_BUF_SIZE, LV_DISP_RENDER_MODE_PARTIAL);
     } else {
         Serial.println("Double buffering failed, falling back to single buffering");
         if (buf1) heap_caps_free(buf1); // Free buf1 if allocated
         if (buf2) heap_caps_free(buf2); // Free buf2 if allocated
-        /* Allocate single buffer */
         buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
         if (!buf1) {
             Serial.println("Failed to allocate even single LVGL buffer");
             while (1); // Halt on failure
         }
-        lv_disp_draw_buf_init(&draw_buf, buf1, NULL, LVGL_BUF_SIZE);
+        lv_display_set_buffers(disp, buf1, NULL, LVGL_BUF_SIZE, LV_DISP_RENDER_MODE_PARTIAL);
     }
 
     /* Initialize the display device */
-    static lv_disp_drv_t disp_drv;
-    lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = ESP_PANEL_LCD_H_RES;
-    disp_drv.ver_res = ESP_PANEL_LCD_V_RES;
-    disp_drv.flush_cb = lvgl_port_disp_flush;
-    disp_drv.draw_buf = &draw_buf;
-    lv_disp_drv_register(&disp_drv);
+    lv_display_set_resolution(disp, ESP_PANEL_LCD_H_RES, ESP_PANEL_LCD_V_RES);
+    lv_display_set_flush_cb(disp, lvgl_port_disp_flush);
 
 #if ESP_PANEL_USE_LCD_TOUCH
     /* Initialize the input device */
-    static lv_indev_drv_t indev_drv;
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = lvgl_port_tp_read;
-    lv_indev_drv_register(&indev_drv);
+    lv_indev_t *indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev, lvgl_port_tp_read);
 #endif
+
     /* Initialize bus and device of panel */
     panel->init();
-    panel->getLcd()->setTiming(800, 480, 4, 8, 8, 4, 8, 8, 16000000);
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
-    panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
+    panel->getLcd()->setCallback(notify_lvgl_flush_ready, disp);
 #endif
 
     Serial.println("Initialize IO expander");
