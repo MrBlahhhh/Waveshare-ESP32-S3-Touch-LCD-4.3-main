@@ -45,6 +45,7 @@ LV_IMG_DECLARE(ui_img_dcs_png);    // assets/dcs.png
 LV_IMG_DECLARE(ui_img_fuel_png);    // assets/fuel.png
 LV_IMG_DECLARE(ui_img_watertemp_png);    // assets/watertemp.png
 LV_IMG_DECLARE(ui_img_turnsignal_png);    // assets/turnsignal.png
+LV_IMG_DECLARE(ui_img_parkingbrake_png);    // assets/parkingbrake.png
 
 // UI INIT
 void ui_init(void);

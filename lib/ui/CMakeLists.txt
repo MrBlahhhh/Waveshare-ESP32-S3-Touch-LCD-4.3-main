@@ -9,6 +9,7 @@ SET(SOURCES components/ui_comp_rpmslider.c
     images/ui_img_dcs_png.c
     images/ui_img_fuel_png.c
     images/ui_img_watertemp_png.c
-    images/ui_img_turnsignal_png.c)
+    images/ui_img_turnsignal_png.c
+    images/ui_img_parkingbrake_png.c)
 
 add_library(ui ${SOURCES})

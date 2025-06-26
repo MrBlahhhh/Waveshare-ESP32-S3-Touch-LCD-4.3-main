@@ -26,9 +26,9 @@ extern lv_obj_t *ui_Speed; // Label for speed display
 /* LVGL porting configurations */
 #define LVGL_TICK_PERIOD_MS     (2)
 #define LVGL_TASK_MAX_DELAY_MS  (100)
-#define LVGL_TASK_MIN_DELAY_MS  (5) // ~200 Hz to catch 20 Hz packets
+#define LVGL_TASK_MIN_DELAY_MS  (4) // ~250 Hz to catch 20 Hz packets
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
-#define LVGL_TASK_PRIORITY      (5)
+#define LVGL_TASK_PRIORITY      (6) // Increased to reduce preemption
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -103,7 +103,7 @@ void lvgl_port_task(void *arg)
             // Update speed label without smoothing
             uint8_t display_speed = receivedData.vehicleSpeed;
             char speed_text[16];
-            snprintf(speed_text, sizeof(speed_text), "%u km/h", display_speed);
+            snprintf(speed_text, sizeof(speed_text), "%u", display_speed);
             lv_label_set_text(ui_Speed, speed_text);
 
             lv_obj_invalidate(ui_rpmslider); // Force redraw
@@ -115,7 +115,7 @@ void lvgl_port_task(void *arg)
             dataReceived = false; // Clear flag after processing
         }
         lvgl_port_unlock();
-        vTaskDelay(pdMS_TO_TICKS(5)); // ~200 Hz to catch 20 Hz packets
+        vTaskDelay(pdMS_TO_TICKS(4)); // ~250 Hz to catch 20 Hz packets
     }
 }
 
@@ -131,7 +131,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
     uint32_t current_time = millis();
     // Only process if enough time has passed (to enforce ~20 Hz)
-    if (current_time - lastPacketTime >= 45) { // ~22 Hz to allow slight jitter
+    if (current_time - lastPacketTime >= 40) { // ~25 Hz to allow jitter
         memcpy(&receivedData, incomingData, sizeof(CanData));
         espnow_packet_count++; // Increment packet counter
         lastPacketTime = current_time;
@@ -144,6 +144,8 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             last_log_time = current_time;
         }
+    } else {
+        ESPNOW_DEBUG("ESP-NOW: Skipped packet at %lu ms\n", current_time);
     }
 }
 
@@ -192,17 +194,17 @@ void setup()
     lv_init();
 
     /* Initialize LVGL buffers in SRAM with 25 lines */
-    uint32_t buffer_size = ESP_PANEL_LCD_H_RES * 25 * sizeof(lv_color_t);
+    uint32_t buffer_size = ESP_PANEL_LCD_H_RES * 75 * sizeof(lv_color_t);
     lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
     lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
     
     static lv_disp_draw_buf_t draw_buf;
     static lv_disp_drv_t disp_drv;
-    lv_disp_draw_buf_init(&draw_buf, buf1, buf2, ESP_PANEL_LCD_H_RES * 25);
+    lv_disp_draw_buf_init(&draw_buf, buf1, buf2, ESP_PANEL_LCD_H_RES * 75);
     lv_disp_drv_init(&disp_drv);
     
     if (buf1 && buf2) {
-        Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x25)\n", 
+        Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x75)\n", 
                      buffer_size);
         Serial.printf("Free SRAM after setup: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     } else {
@@ -273,7 +275,7 @@ void setup()
     lv_arc_set_range(ui_rpmslider, 0, 11000);
     lv_arc_set_value(ui_rpmslider, 0);
     lv_label_set_text(ui_RPM, "0");
-    lv_label_set_text(ui_Speed, "0 km/h");
+    lv_label_set_text(ui_Speed, "0");
     Serial.println("Initial RPM set to 0, Speed set to 0 km/h");
     lv_obj_invalidate(ui_rpmslider); // Force initial redraw
     lv_obj_invalidate(ui_RPM);

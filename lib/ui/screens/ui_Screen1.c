@@ -5,7 +5,9 @@
 
 #include "../ui.h"
 
+lv_obj_t * uic_Parkingbrake;
 lv_obj_t * uic_Speed;
+lv_obj_t * uic_Turnsignal;
 lv_obj_t * uic_fuelbar;
 lv_obj_t * uic_water;
 lv_obj_t * uic_fuel;
@@ -23,8 +25,9 @@ lv_obj_t * ui_DSC = NULL;
 lv_obj_t * ui_fuel = NULL;
 lv_obj_t * ui_water = NULL;
 lv_obj_t * ui_fuelbar = NULL;
-lv_obj_t * ui_Image8 = NULL;
+lv_obj_t * ui_Turnsignal = NULL;
 lv_obj_t * ui_Speed = NULL;
+lv_obj_t * ui_Parkingbrake = NULL;
 // event funtions
 
 // build funtions
@@ -145,28 +148,38 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_bg_color(ui_fuelbar, lv_color_hex(0x900E0E), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_fuelbar, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
-    ui_Image8 = lv_img_create(ui_Screen1);
-    lv_img_set_src(ui_Image8, &ui_img_turnsignal_png);
-    lv_obj_set_width(ui_Image8, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_Image8, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_Image8, 0);
-    lv_obj_set_y(ui_Image8, 185);
-    lv_obj_set_align(ui_Image8, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_Image8, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_clear_flag(ui_Image8, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_img_recolor(ui_Image8, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_img_recolor_opa(ui_Image8, 225, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Turnsignal = lv_img_create(ui_Screen1);
+    lv_img_set_src(ui_Turnsignal, &ui_img_turnsignal_png);
+    lv_obj_set_width(ui_Turnsignal, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_Turnsignal, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_Turnsignal, 0);
+    lv_obj_set_y(ui_Turnsignal, 185);
+    lv_obj_set_align(ui_Turnsignal, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_Turnsignal, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_Turnsignal, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_img_recolor(ui_Turnsignal, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_img_recolor_opa(ui_Turnsignal, 225, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_Speed = lv_label_create(ui_Screen1);
     lv_obj_set_width(ui_Speed, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_Speed, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_Speed, -30);
-    lv_obj_set_y(ui_Speed, -50);
+    lv_obj_set_x(ui_Speed, 0);
+    lv_obj_set_y(ui_Speed, 6);
     lv_obj_set_align(ui_Speed, LV_ALIGN_CENTER);
-    lv_obj_set_style_text_color(ui_Speed, lv_color_hex(0xE5EAF5), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_text(ui_Speed, "Speed");
+    lv_obj_set_style_text_color(ui_Speed, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_Speed, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_Speed, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_transform_zoom(ui_Speed, 400, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_Parkingbrake = lv_img_create(ui_Screen1);
+    lv_img_set_src(ui_Parkingbrake, &ui_img_parkingbrake_png);
+    lv_obj_set_width(ui_Parkingbrake, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_Parkingbrake, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_Parkingbrake, -200);
+    lv_obj_set_y(ui_Parkingbrake, -200);
+    lv_obj_set_align(ui_Parkingbrake, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_Parkingbrake, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_Parkingbrake, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
     uic_rpmslider = ui_rpmslider;
     uic_RPM = ui_RPM;
@@ -175,7 +188,9 @@ void ui_Screen1_screen_init(void)
     uic_fuel = ui_fuel;
     uic_water = ui_water;
     uic_fuelbar = ui_fuelbar;
+    uic_Turnsignal = ui_Turnsignal;
     uic_Speed = ui_Speed;
+    uic_Parkingbrake = ui_Parkingbrake;
 
 }
 
@@ -201,8 +216,11 @@ void ui_Screen1_screen_destroy(void)
     ui_water = NULL;
     uic_fuelbar = NULL;
     ui_fuelbar = NULL;
-    ui_Image8 = NULL;
+    uic_Turnsignal = NULL;
+    ui_Turnsignal = NULL;
     uic_Speed = NULL;
     ui_Speed = NULL;
+    uic_Parkingbrake = NULL;
+    ui_Parkingbrake = NULL;
 
 }
