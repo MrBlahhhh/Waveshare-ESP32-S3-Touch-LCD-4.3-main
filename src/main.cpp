@@ -263,7 +263,7 @@ void setup()
     } else {
         Serial.println("ui_rpmslider initialized successfully");
         // Set arc range (adjust as needed for your RPM range)
-        lv_arc_set_range(ui_rpmslider, 0, 8000);
+        lv_arc_set_range(ui_rpmslider, 0, 11000);
         lv_arc_set_value(ui_rpmslider, 0); // Initialize to 0
     }
 
