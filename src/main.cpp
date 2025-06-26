@@ -8,6 +8,8 @@
 
 // Declare UI objects from ui_screen1.c
 extern lv_obj_t *ui_rpmslider;
+extern lv_obj_t *ui_RPM; // Label for RPM display
+extern lv_obj_t *ui_Speed; // Label for speed display
 
 // Extend IO Pin define
 #define TP_RST 1
@@ -24,10 +26,9 @@ extern lv_obj_t *ui_rpmslider;
 /* LVGL porting configurations */
 #define LVGL_TICK_PERIOD_MS     (2)
 #define LVGL_TASK_MAX_DELAY_MS  (100)
-#define LVGL_TASK_MIN_DELAY_MS  (5)
+#define LVGL_TASK_MIN_DELAY_MS  (5) // ~200 Hz to catch 20 Hz packets
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
-#define LVGL_TASK_PRIORITY      (3)
-#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 40)
+#define LVGL_TASK_PRIORITY      (5)
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -54,6 +55,7 @@ typedef struct {
 
 CanData receivedData;
 volatile bool dataReceived = false;
+volatile uint32_t lastPacketTime = 0; // Track packet timing
 
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;
@@ -61,36 +63,18 @@ SemaphoreHandle_t lvgl_mux = NULL;
 /* Debug logging macro */
 #define ESPNOW_DEBUG Serial.printf
 
-/* FPS label (fallback) */
-static lv_obj_t *fps_label = NULL;
-
-/* Manual FPS counter variables */
-static volatile uint32_t frame_count = 0;
-static uint32_t last_fps = 0;
+/* Counters for frequency measurement */
+static volatile uint32_t espnow_packet_count = 0;
+static uint32_t lvgl_update_count = 0;
+static uint32_t last_freq_log_time = 0;
+const uint32_t freq_log_interval = 1000; // Log frequency every 1000 ms
 
 /* Display flushing */
-void lvgl_port_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
+void lvgl_port_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
 {
-    panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, (lv_color_t *)color_p);
-    lv_display_flush_ready(disp);
+    panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, (uint16_t *)color_p);
+    lv_disp_flush_ready(disp_drv);
 }
-
-#if ESP_PANEL_USE_LCD_TOUCH
-/* Read the touchpad */
-void lvgl_port_tp_read(lv_indev_t *indev, lv_indev_data_t *data)
-{
-    panel->getLcdTouch()->readData();
-    bool touched = panel->getLcdTouch()->getTouchState();
-    if (!touched) {
-        data->state = LV_INDEV_STATE_RELEASED;
-    } else {
-        TouchPoint point = panel->getLcdTouch()->getPoint();
-        data->state = LV_INDEV_STATE_PRESSED;
-        data->point.x = point.x;
-        data->point.y = point.y;
-    }
-}
-#endif
 
 void lvgl_port_lock(int timeout_ms)
 {
@@ -108,43 +92,57 @@ void lvgl_port_task(void *arg)
     Serial.println("Starting LVGL task");
     while (1) {
         lvgl_port_lock(-1);
-        lv_timer_handler();
-        frame_count++; // Increment frame count for manual FPS
+        if (dataReceived) {
+            // Update RPM arc and label without smoothing
+            uint16_t display_rpm = receivedData.rpm;
+            lv_arc_set_value(ui_rpmslider, display_rpm);
+            char rpm_text[16];
+            snprintf(rpm_text, sizeof(rpm_text), "%u", display_rpm);
+            lv_label_set_text(ui_RPM, rpm_text);
+
+            // Update speed label without smoothing
+            uint8_t display_speed = receivedData.vehicleSpeed;
+            char speed_text[16];
+            snprintf(speed_text, sizeof(speed_text), "%u km/h", display_speed);
+            lv_label_set_text(ui_Speed, speed_text);
+
+            lv_obj_invalidate(ui_rpmslider); // Force redraw
+            lv_obj_invalidate(ui_RPM);
+            lv_obj_invalidate(ui_Speed);
+
+            lv_task_handler(); // Process LVGL updates
+            lvgl_update_count++; // Increment counter
+            dataReceived = false; // Clear flag after processing
+        }
         lvgl_port_unlock();
-        vTaskDelay(pdMS_TO_TICKS(16));
+        vTaskDelay(pdMS_TO_TICKS(5)); // ~200 Hz to catch 20 Hz packets
     }
 }
 
-/* ESP-NOW callback function with debugging */
+/* ESP-NOW callback function with throttled debugging */
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-    ESPNOW_DEBUG("ESP-NOW: Data received, length: %d bytes\n", len);
+    static uint32_t last_log_time = 0;
+    const uint32_t log_interval = 1000; // Log every 1000 ms
+
     if (len != sizeof(CanData)) {
         ESPNOW_DEBUG("ESP-NOW: Error: Invalid data length, expected %d, got %d\n", sizeof(CanData), len);
         return;
     }
 
-    memcpy(&receivedData, incomingData, sizeof(CanData));
-    ESPNOW_DEBUG("ESP-NOW: Received RPM: %u, Coolant Temp: %u, Vehicle Speed: %u\n",
-                 receivedData.rpm, receivedData.coolantTemp, receivedData.vehicleSpeed);
-    ESPNOW_DEBUG("ESP-NOW: Source MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    
-    dataReceived = true;
-}
+    uint32_t current_time = millis();
+    // Only process if enough time has passed (to enforce ~20 Hz)
+    if (current_time - lastPacketTime >= 45) { // ~22 Hz to allow slight jitter
+        memcpy(&receivedData, incomingData, sizeof(CanData));
+        espnow_packet_count++; // Increment packet counter
+        lastPacketTime = current_time;
+        dataReceived = true;
 
-/* FPS update callback for fallback label */
-static void fps_update_cb(lv_timer_t *timer)
-{
-    if (fps_label) {
-        // Calculate FPS based on frame_count over 1 second
-        uint32_t fps = frame_count;
-        frame_count = 0; // Reset for next second
-        char buf[16];
-        snprintf(buf, sizeof(buf), "FPS: %lu", fps);
-        lv_label_set_text(fps_label, buf);
-        if (fps != last_fps) {
-            ESPNOW_DEBUG("Manual FPS: %lu\n", fps);
-            last_fps = fps;
+        if (current_time - last_log_time >= log_interval) {
+            ESPNOW_DEBUG("ESP-NOW: Received RPM: %u, Coolant Temp: %u, Vehicle Speed: %u\n",
+                         receivedData.rpm, receivedData.coolantTemp, receivedData.vehicleSpeed);
+            ESPNOW_DEBUG("ESP-NOW: Source MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            last_log_time = current_time;
         }
     }
 }
@@ -155,15 +153,13 @@ void setup()
     delay(3000);       
 
     String LVGL_Arduino = "Hello LVGL! ";
-    LVGL_Arduino += String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch();
+    LVGL_Arduino += String('V') + LVGL_VERSION_MAJOR + "." + LVGL_VERSION_MINOR + "." + LVGL_VERSION_PATCH;
     Serial.println(LVGL_Arduino);
     Serial.println("I am ESP32_Display_Panel");
 
     /* Log free memory before allocations */
     Serial.printf("Free SRAM: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-    #ifdef CONFIG_SPIRAM
     Serial.printf("Free PSRAM: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-    #endif
 
     /* Initialize WiFi for ESP-NOW */
     ESPNOW_DEBUG("ESP-NOW: Initializing WiFi in STA mode\n");
@@ -195,45 +191,39 @@ void setup()
     /* Initialize LVGL core */
     lv_init();
 
-    /* Initialize system monitor for default FPS display */
-    _lv_sysmon_builtin_init();
-    Serial.println("LVGL system monitor initialized");
-
-    /* Initialize LVGL buffers */
-    uint8_t *buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
-    uint8_t *buf2 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
+    /* Initialize LVGL buffers in SRAM with 25 lines */
+    uint32_t buffer_size = ESP_PANEL_LCD_H_RES * 25 * sizeof(lv_color_t);
+    lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
+    lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
     
-    lv_display_t *disp = lv_display_create(ESP_PANEL_LCD_H_RES, ESP_PANEL_LCD_V_RES);
+    static lv_disp_draw_buf_t draw_buf;
+    static lv_disp_drv_t disp_drv;
+    lv_disp_draw_buf_init(&draw_buf, buf1, buf2, ESP_PANEL_LCD_H_RES * 25);
+    lv_disp_drv_init(&disp_drv);
+    
     if (buf1 && buf2) {
-        Serial.println("Double buffering enabled");
-        lv_display_set_buffers(disp, buf1, buf2, LVGL_BUF_SIZE, LV_DISP_RENDER_MODE_PARTIAL);
+        Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x25)\n", 
+                     buffer_size);
+        Serial.printf("Free SRAM after setup: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     } else {
-        Serial.println("Double buffering failed, falling back to single buffering");
+        Serial.println("ERROR: Failed to allocate double buffers in SRAM");
         if (buf1) heap_caps_free(buf1);
         if (buf2) heap_caps_free(buf2);
-        buf1 = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
-        if (!buf1) {
-            Serial.println("Failed to allocate even single LVGL buffer");
-            while (1);
-        }
-        lv_display_set_buffers(disp, buf1, NULL, LVGL_BUF_SIZE, LV_DISP_RENDER_MODE_PARTIAL);
+        Serial.printf("Free SRAM after failure: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        while (1); // Halt on failure
     }
 
     /* Initialize the display device */
-    lv_display_set_resolution(disp, ESP_PANEL_LCD_H_RES, ESP_PANEL_LCD_V_RES);
-    lv_display_set_flush_cb(disp, lvgl_port_disp_flush);
-
-#if ESP_PANEL_USE_LCD_TOUCH
-    /* Initialize the input device */
-    lv_indev_t *indev = lv_indev_create();
-    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
-    lv_indev_set_read_cb(indev, lvgl_port_tp_read);
-#endif
+    disp_drv.hor_res = ESP_PANEL_LCD_H_RES;
+    disp_drv.ver_res = ESP_PANEL_LCD_V_RES;
+    disp_drv.flush_cb = lvgl_port_disp_flush;
+    disp_drv.draw_buf = &draw_buf;
+    lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
 
     /* Initialize bus and device of panel */
     panel->init();
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
-    panel->getLcd()->setCallback(notify_lvgl_flush_ready, disp);
+    panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
 #endif
 
     Serial.println("Initialize IO expander");
@@ -246,6 +236,12 @@ void setup()
     expander->digitalWrite(USB_SEL, LOW);
     panel->addIOExpander(expander);
 
+    /* Reset LCD to ensure proper initialization */
+    expander->digitalWrite(LCD_RST, LOW);
+    delay(100);
+    expander->digitalWrite(LCD_RST, HIGH);
+    delay(100);
+
     /* Start panel */
     panel->begin();
 
@@ -254,30 +250,36 @@ void setup()
     xTaskCreate(lvgl_port_task, "lvgl", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL);
 
     lvgl_port_lock(-1);
-    // Comment out ui_init() temporarily to test if default FPS counter appears
     ui_init();
-    // Verify ui_rpmslider is initialized
+    // Verify ui_rpmslider, ui_RPM, and ui_Speed
     if (ui_rpmslider == NULL) {
         Serial.println("ERROR: ui_rpmslider is NULL, check ui_init()");
-        while (1); // Halt to indicate critical error
-    } else {
-        Serial.println("ui_rpmslider initialized successfully");
-        // Set arc range (adjust as needed for your RPM range)
-        lv_arc_set_range(ui_rpmslider, 0, 11000);
-        lv_arc_set_value(ui_rpmslider, 0); // Initialize to 0
+        while (1);
     }
-
-    // Create fallback FPS label
-    fps_label = lv_label_create(lv_screen_active());
-    lv_label_set_text(fps_label, "FPS: --");
-    lv_obj_set_pos(fps_label, 10, 10); // Top-left corner
-    lv_obj_set_style_text_color(fps_label, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(fps_label, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(fps_label, LV_OPA_50, 0);
-    // Create timer to update FPS
-    lv_timer_create(fps_update_cb, 1000, NULL); // Update every 1 second
-    Serial.println("Fallback FPS label created");
-
+    if (ui_RPM == NULL) {
+        Serial.println("ERROR: ui_RPM is NULL, check ui_init()");
+        while (1);
+    }
+    if (ui_Speed == NULL) {
+        Serial.println("ERROR: ui_Speed is NULL, check ui_init()");
+        while (1);
+    }
+    Serial.println("ui_rpmslider, ui_RPM, and ui_Speed initialized successfully");
+    // Ensure widgets are not hidden
+    lv_obj_clear_flag(ui_rpmslider, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ui_RPM, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ui_Speed, LV_OBJ_FLAG_HIDDEN);
+    // Set arc range to 0-11000
+    lv_arc_set_range(ui_rpmslider, 0, 11000);
+    lv_arc_set_value(ui_rpmslider, 0);
+    lv_label_set_text(ui_RPM, "0");
+    lv_label_set_text(ui_Speed, "0 km/h");
+    Serial.println("Initial RPM set to 0, Speed set to 0 km/h");
+    lv_obj_invalidate(ui_rpmslider); // Force initial redraw
+    lv_obj_invalidate(ui_RPM);
+    lv_obj_invalidate(ui_Speed);
+    lv_refr_now(NULL); // Force initial screen refresh
+    Serial.println("Initial screen refresh completed");
     lvgl_port_unlock();
 
     Serial.println("Setup done");
@@ -285,17 +287,16 @@ void setup()
 
 void loop()
 {
-    if (dataReceived) {
-        lvgl_port_lock(-1);
-        // Debug the RPM value being set
-        ESPNOW_DEBUG("LVGL: Setting ui_rpmslider to RPM: %u\n", receivedData.rpm);
-        lv_arc_set_value(ui_rpmslider, receivedData.rpm);
-        // Force display refresh
-        lv_refr_now(NULL);
-        lvgl_port_unlock();
-        ESPNOW_DEBUG("ESP-NOW: Updated RPM slider to %u\n", receivedData.rpm);
-        dataReceived = false;
+    // Log frequency metrics
+    uint32_t current_time = millis();
+    if (current_time - last_freq_log_time >= freq_log_interval) {
+        float espnow_hz = (float)espnow_packet_count * 1000.0f / freq_log_interval;
+        float lvgl_hz = (float)lvgl_update_count * 1000.0f / freq_log_interval;
+        ESPNOW_DEBUG("FREQ: ESP-NOW Packet Hz: %.2f, LVGL Update Hz: %.2f\n", espnow_hz, lvgl_hz);
+        espnow_packet_count = 0; // Reset counters
+        lvgl_update_count = 0;
+        last_freq_log_time = current_time;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10)); // Reduced delay for faster updates
+    vTaskDelay(pdMS_TO_TICKS(10)); // 10ms for frequency logging
 }
