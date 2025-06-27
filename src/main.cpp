@@ -30,7 +30,8 @@ extern lv_obj_t *ui_DSC; // DSC indicator
 /* LVGL porting configurations */
 #define LVGL_TICK_PERIOD_MS     (2)
 #define LVGL_TASK_MAX_DELAY_MS  (100)
-#define LVGL_TASK_MIN_DELAY_MS  (2) // ~500 Hz to ensure 20 Hz updates
+#define LVGL_TASK_MIN_DELAY_MS  (2) // ~500 Hz for active updates
+#define LVGL_TASK_IDLE_DELAY_MS (10) // ~100 Hz when idle
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
 #define LVGL_TASK_PRIORITY      (6) // Increased to reduce preemption
 
@@ -63,6 +64,14 @@ volatile uint32_t lastPacketTime = 0; // Track packet timing
 static uint32_t lastDataUpdateTime = 0; // Track last data update for timeout
 #define DATA_TIMEOUT_MS 1000 // Timeout to set indicators to disabled if no data
 
+// Track previous states to avoid redundant updates
+static uint16_t prev_rpm = 0;
+static uint8_t prev_speed = 0;
+static bool prev_parkingBrake = false;
+static bool prev_turnSignal = false;
+static bool prev_checkEngine = false;
+static bool prev_dsc = false;
+
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;
 
@@ -93,9 +102,8 @@ void lvgl_port_unlock(void)
     xSemaphoreGiveRecursive(lvgl_mux);
 }
 
-void update_indicator_state(lv_obj_t *obj, bool enabled, const char *name)
+void update_indicator_state(lv_obj_t *obj, bool enabled)
 {
-    lvgl_port_lock(-1);
     if (enabled) {
         // Bright red for enabled state
         lv_obj_set_style_bg_color(obj, lv_color_hex(0xFF0000), LV_PART_MAIN);
@@ -108,8 +116,6 @@ void update_indicator_state(lv_obj_t *obj, bool enabled, const char *name)
         lv_obj_set_style_img_opa(obj, LV_OPA_10, 0); // For image-based indicators
     }
     lv_obj_invalidate(obj); // Force redraw
-    lv_refr_now(NULL); // Force immediate screen refresh
-    lvgl_port_unlock();
 }
 
 void lvgl_port_task(void *arg)
@@ -118,56 +124,97 @@ void lvgl_port_task(void *arg)
     while (1) {
         lvgl_port_lock(-1);
         uint32_t current_time = millis();
+        bool updated = false;
 
         // Check for data timeout to set indicators to disabled
         if (current_time - lastDataUpdateTime > DATA_TIMEOUT_MS) {
-            update_indicator_state(ui_ParkingBrake, false, "ParkingBrake");
-            update_indicator_state(ui_TurnSignal, false, "TurnSignal");
-            update_indicator_state(ui_CheckEngine, false, "CheckEngine");
-            update_indicator_state(ui_DSC, false, "DSC");
+            if (prev_parkingBrake) {
+                update_indicator_state(ui_ParkingBrake, false);
+                prev_parkingBrake = false;
+                updated = true;
+            }
+            if (prev_turnSignal) {
+                update_indicator_state(ui_TurnSignal, false);
+                prev_turnSignal = false;
+                updated = true;
+            }
+            if (prev_checkEngine) {
+                update_indicator_state(ui_CheckEngine, false);
+                prev_checkEngine = false;
+                updated = true;
+            }
+            if (prev_dsc) {
+                update_indicator_state(ui_DSC, false);
+                prev_dsc = false;
+                updated = true;
+            }
         }
 
         if (dataReceived) {
-            // Update RPM arc and label without smoothing
-            uint16_t display_rpm = receivedData.rpm;
-            lv_arc_set_value(ui_rpmslider, display_rpm);
-            char rpm_text[16];
-            snprintf(rpm_text, sizeof(rpm_text), "%u", display_rpm);
-            lv_label_set_text(ui_RPM, rpm_text);
+            // Update RPM arc and label if changed
+            if (receivedData.rpm != prev_rpm) {
+                lv_arc_set_value(ui_rpmslider, receivedData.rpm);
+                char rpm_text[16];
+                snprintf(rpm_text, sizeof(rpm_text), "%u", receivedData.rpm);
+                lv_label_set_text(ui_RPM, rpm_text);
+                lv_obj_invalidate(ui_rpmslider);
+                lv_obj_invalidate(ui_RPM);
+                prev_rpm = receivedData.rpm;
+                updated = true;
+            }
 
-            // Update speed label without smoothing
-            uint8_t display_speed = receivedData.vehicleSpeed;
-            char speed_text[16];
-            snprintf(speed_text, sizeof(speed_text), "%u", display_speed);
-            lv_label_set_text(ui_Speed, speed_text);
+            // Update speed label if changed
+            if (receivedData.vehicleSpeed != prev_speed) {
+                char speed_text[16];
+                snprintf(speed_text, sizeof(speed_text), "%u", receivedData.vehicleSpeed);
+                lv_label_set_text(ui_Speed, speed_text);
+                lv_obj_invalidate(ui_Speed);
+                prev_speed = receivedData.vehicleSpeed;
+                updated = true;
+            }
 
-            // Update indicators based on CAN data
-            update_indicator_state(ui_ParkingBrake, receivedData.handbrakeSwitch, "ParkingBrake");
-            update_indicator_state(ui_TurnSignal, receivedData.turnSignalIndicator != 0, "TurnSignal");
-            update_indicator_state(ui_CheckEngine, receivedData.checkEngineLight, "CheckEngine");
-            update_indicator_state(ui_DSC, receivedData.ascLampStatus, "DSC");
+            // Update indicators only if state changed
+            if (receivedData.handbrakeSwitch != prev_parkingBrake) {
+                update_indicator_state(ui_ParkingBrake, receivedData.handbrakeSwitch);
+                prev_parkingBrake = receivedData.handbrakeSwitch;
+                updated = true;
+            }
+            bool turnSignalState = receivedData.turnSignalIndicator != 0;
+            if (turnSignalState != prev_turnSignal) {
+                update_indicator_state(ui_TurnSignal, turnSignalState);
+                prev_turnSignal = turnSignalState;
+                updated = true;
+            }
+            if (receivedData.checkEngineLight != prev_checkEngine) {
+                update_indicator_state(ui_CheckEngine, receivedData.checkEngineLight);
+                prev_checkEngine = receivedData.checkEngineLight;
+                updated = true;
+            }
+            if (receivedData.ascLampStatus != prev_dsc) {
+                update_indicator_state(ui_DSC, receivedData.ascLampStatus);
+                prev_dsc = receivedData.ascLampStatus;
+                updated = true;
+            }
 
-            lv_obj_invalidate(ui_rpmslider); // Force redraw
-            lv_obj_invalidate(ui_RPM);
-            lv_obj_invalidate(ui_Speed);
-            lv_obj_invalidate(ui_ParkingBrake);
-            lv_obj_invalidate(ui_TurnSignal);
-            lv_obj_invalidate(ui_CheckEngine);
-            lv_obj_invalidate(ui_DSC);
-
-            lv_task_handler(); // Process LVGL updates
-            lv_refr_now(NULL); // Force immediate refresh
-            lvgl_update_count++; // Increment counter
-            lastDataUpdateTime = current_time; // Update last data time
-            dataReceived = false; // Clear flag after processing
+            lastDataUpdateTime = current_time;
+            dataReceived = false;
         }
+
+        // Process LVGL updates and refresh only if something changed
+        if (updated) {
+            lv_task_handler();
+            lv_refr_now(NULL);
+            lvgl_update_count++;
+        }
+
         lvgl_port_unlock();
-        vTaskDelay(pdMS_TO_TICKS(2)); // ~500 Hz to ensure 20 Hz updates
+        vTaskDelay(pdMS_TO_TICKS(dataReceived ? LVGL_TASK_MIN_DELAY_MS : LVGL_TASK_IDLE_DELAY_MS));
     }
 }
 
 /* ESP-NOW callback function with throttled debugging */
-void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len)
+{
     static uint32_t last_log_time = 0;
     const uint32_t log_interval = 1000; // Log every 1000 ms
 
@@ -180,7 +227,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     // Only process if enough time has passed (to enforce ~20 Hz)
     if (current_time - lastPacketTime >= 40) { // ~25 Hz to allow jitter
         memcpy(&receivedData, incomingData, sizeof(CanData));
-        espnow_packet_count++; // Increment packet counter
+        espnow_packet_count++;
         lastPacketTime = current_time;
         dataReceived = true;
 
@@ -191,15 +238,13 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             last_log_time = current_time;
         }
-    } else {
-        ESPNOW_DEBUG("ESP-NOW: Skipped packet at %lu ms\n", current_time);
     }
 }
 
 void setup()
 {
     Serial.begin(115200);
-    delay(3000);       
+    delay(3000);
 
     String LVGL_Arduino = "Hello LVGL! ";
     LVGL_Arduino += String('V') + LVGL_VERSION_MAJOR + "." + LVGL_VERSION_MINOR + "." + LVGL_VERSION_PATCH;
@@ -219,7 +264,7 @@ void setup()
     ESPNOW_DEBUG("ESP-NOW: Initializing ESP-NOW\n");
     esp_err_t init_result = esp_now_init();
     if (init_result != ESP_OK) {
-        ESPNOW_DEBUG("ESP-NOW: Error initializing ESP-NOW: %s (0x%x)\n", 
+        ESPNOW_DEBUG("ESP-NOW: Error initializing ESP-NOW: %s (0x%x)\n",
                      esp_err_to_name(init_result), init_result);
         return;
     }
@@ -229,7 +274,7 @@ void setup()
     ESPNOW_DEBUG("ESP-NOW: Registering receive callback\n");
     esp_err_t cb_result = esp_now_register_recv_cb(OnDataRecv);
     if (cb_result != ESP_OK) {
-        ESPNOW_DEBUG("ESP-NOW: Error registering callback: %s (0x%x)\n", 
+        ESPNOW_DEBUG("ESP-NOW: Error registering callback: %s (0x%x)\n",
                      esp_err_to_name(cb_result), cb_result);
         return;
     }
@@ -244,14 +289,14 @@ void setup()
     uint32_t buffer_size = ESP_PANEL_LCD_H_RES * 75 * sizeof(lv_color_t);
     lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
     lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
-    
+
     static lv_disp_draw_buf_t draw_buf;
     static lv_disp_drv_t disp_drv;
     lv_disp_draw_buf_init(&draw_buf, buf1, buf2, ESP_PANEL_LCD_H_RES * 75);
     lv_disp_drv_init(&disp_drv);
-    
+
     if (buf1 && buf2) {
-        Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x75)\n", 
+        Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x75)\n",
                      buffer_size);
         Serial.printf("Free SRAM after setup: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     } else {
@@ -343,8 +388,7 @@ void setup()
     lv_arc_set_value(ui_rpmslider, 0);
     lv_label_set_text(ui_RPM, "0");
     lv_label_set_text(ui_Speed, "0");
-    // Initialize indicators to disabled state with explicit style reset
-    lvgl_port_lock(-1);
+    // Initialize indicators to disabled state
     lv_obj_set_style_bg_color(ui_ParkingBrake, lv_color_hex(0xFF0000), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui_ParkingBrake, LV_OPA_10, LV_PART_MAIN);
     lv_obj_set_style_img_opa(ui_ParkingBrake, LV_OPA_10, 0);
@@ -361,18 +405,14 @@ void setup()
     lv_obj_invalidate(ui_TurnSignal);
     lv_obj_invalidate(ui_CheckEngine);
     lv_obj_invalidate(ui_DSC);
-    lv_refr_now(NULL);
-    lvgl_port_unlock();
-    Serial.println("Initial RPM set to 0, Speed set to 0 km/h, indicators set to disabled");
-    lv_obj_invalidate(ui_rpmslider); // Force initial redraw
+    lv_obj_invalidate(ui_rpmslider);
     lv_obj_invalidate(ui_RPM);
     lv_obj_invalidate(ui_Speed);
-    lv_refr_now(NULL); // Force initial screen refresh
+    lv_refr_now(NULL);
+    Serial.println("Initial RPM set to 0, Speed set to 0 km/h, indicators set to disabled");
     Serial.println("Initial screen refresh completed");
     lvgl_port_unlock();
 
-    // Initialize receivedData to ensure indicators start disabled
-    memset(&receivedData, 0, sizeof(CanData));
     lastDataUpdateTime = millis();
     Serial.println("Setup done");
 }
@@ -385,7 +425,7 @@ void loop()
         float espnow_hz = (float)espnow_packet_count * 1000.0f / freq_log_interval;
         float lvgl_hz = (float)lvgl_update_count * 1000.0f / freq_log_interval;
         ESPNOW_DEBUG("FREQ: ESP-NOW Packet Hz: %.2f, LVGL Update Hz: %.2f\n", espnow_hz, lvgl_hz);
-        espnow_packet_count = 0; // Reset counters
+        espnow_packet_count = 0;
         lvgl_update_count = 0;
         last_freq_log_time = current_time;
     }
