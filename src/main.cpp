@@ -28,12 +28,12 @@ extern lv_obj_t *ui_DSC; // DSC indicator
 #define I2C_MASTER_SCL_IO 9
 
 /* LVGL porting configurations */
-#define LVGL_TICK_PERIOD_MS     (2)
+#define LVGL_TICK_PERIOD_MS     (2) // 500 Hz for timer
 #define LVGL_TASK_MAX_DELAY_MS  (100)
 #define LVGL_TASK_MIN_DELAY_MS  (2) // ~500 Hz for active updates
 #define LVGL_TASK_IDLE_DELAY_MS (10) // ~100 Hz when idle
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
-#define LVGL_TASK_PRIORITY      (6) // Increased to reduce preemption
+#define LVGL_TASK_PRIORITY      (6)
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -62,7 +62,7 @@ CanData receivedData;
 volatile bool dataReceived = false;
 volatile uint32_t lastPacketTime = 0; // Track packet timing
 static uint32_t lastDataUpdateTime = 0; // Track last data update for timeout
-#define DATA_TIMEOUT_MS 1000 // Timeout to set indicators to disabled if no data
+#define DATA_TIMEOUT_MS 1000 // Timeout to set indicators to disabled
 
 // Track previous states to avoid redundant updates
 static uint16_t prev_rpm = 0;
@@ -227,7 +227,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len)
     // Only process if enough time has passed (to enforce ~20 Hz)
     if (current_time - lastPacketTime >= 40) { // ~25 Hz to allow jitter
         memcpy(&receivedData, incomingData, sizeof(CanData));
-        espnow_packet_count++;
+        espnow_packet_count++; // Increment packet counter
         lastPacketTime = current_time;
         dataReceived = true;
 
@@ -410,7 +410,6 @@ void setup()
     lv_obj_invalidate(ui_Speed);
     lv_refr_now(NULL);
     Serial.println("Initial RPM set to 0, Speed set to 0 km/h, indicators set to disabled");
-    Serial.println("Initial screen refresh completed");
     lvgl_port_unlock();
 
     lastDataUpdateTime = millis();
@@ -425,7 +424,7 @@ void loop()
         float espnow_hz = (float)espnow_packet_count * 1000.0f / freq_log_interval;
         float lvgl_hz = (float)lvgl_update_count * 1000.0f / freq_log_interval;
         ESPNOW_DEBUG("FREQ: ESP-NOW Packet Hz: %.2f, LVGL Update Hz: %.2f\n", espnow_hz, lvgl_hz);
-        espnow_packet_count = 0;
+        espnow_packet_count = 0; // Reset counters
         lvgl_update_count = 0;
         last_freq_log_time = current_time;
     }
