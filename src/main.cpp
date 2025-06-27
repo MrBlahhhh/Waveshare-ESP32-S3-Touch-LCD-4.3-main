@@ -10,6 +10,10 @@
 extern lv_obj_t *ui_rpmslider;
 extern lv_obj_t *ui_RPM; // Label for RPM display
 extern lv_obj_t *ui_Speed; // Label for speed display
+extern lv_obj_t *ui_ParkingBrake; // Parking brake indicator
+extern lv_obj_t *ui_TurnSignal; // Turn signal indicator
+extern lv_obj_t *ui_CheckEngine; // Check engine light indicator
+extern lv_obj_t *ui_DSC; // DSC indicator
 
 // Extend IO Pin define
 #define TP_RST 1
@@ -26,7 +30,7 @@ extern lv_obj_t *ui_Speed; // Label for speed display
 /* LVGL porting configurations */
 #define LVGL_TICK_PERIOD_MS     (2)
 #define LVGL_TASK_MAX_DELAY_MS  (100)
-#define LVGL_TASK_MIN_DELAY_MS  (4) // ~250 Hz to catch 20 Hz packets
+#define LVGL_TASK_MIN_DELAY_MS  (2) // ~500 Hz to ensure 20 Hz updates
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
 #define LVGL_TASK_PRIORITY      (6) // Increased to reduce preemption
 
@@ -56,6 +60,8 @@ typedef struct {
 CanData receivedData;
 volatile bool dataReceived = false;
 volatile uint32_t lastPacketTime = 0; // Track packet timing
+static uint32_t lastDataUpdateTime = 0; // Track last data update for timeout
+#define DATA_TIMEOUT_MS 1000 // Timeout to set indicators to disabled if no data
 
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;
@@ -87,11 +93,40 @@ void lvgl_port_unlock(void)
     xSemaphoreGiveRecursive(lvgl_mux);
 }
 
+void update_indicator_state(lv_obj_t *obj, bool enabled, const char *name)
+{
+    lvgl_port_lock(-1);
+    if (enabled) {
+        // Bright red for enabled state
+        lv_obj_set_style_bg_color(obj, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_img_opa(obj, LV_OPA_COVER, 0); // For image-based indicators
+    } else {
+        // Almost transparent red for disabled state
+        lv_obj_set_style_bg_color(obj, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_10, LV_PART_MAIN);
+        lv_obj_set_style_img_opa(obj, LV_OPA_10, 0); // For image-based indicators
+    }
+    lv_obj_invalidate(obj); // Force redraw
+    lv_refr_now(NULL); // Force immediate screen refresh
+    lvgl_port_unlock();
+}
+
 void lvgl_port_task(void *arg)
 {
     Serial.println("Starting LVGL task");
     while (1) {
         lvgl_port_lock(-1);
+        uint32_t current_time = millis();
+
+        // Check for data timeout to set indicators to disabled
+        if (current_time - lastDataUpdateTime > DATA_TIMEOUT_MS) {
+            update_indicator_state(ui_ParkingBrake, false, "ParkingBrake");
+            update_indicator_state(ui_TurnSignal, false, "TurnSignal");
+            update_indicator_state(ui_CheckEngine, false, "CheckEngine");
+            update_indicator_state(ui_DSC, false, "DSC");
+        }
+
         if (dataReceived) {
             // Update RPM arc and label without smoothing
             uint16_t display_rpm = receivedData.rpm;
@@ -106,16 +141,28 @@ void lvgl_port_task(void *arg)
             snprintf(speed_text, sizeof(speed_text), "%u", display_speed);
             lv_label_set_text(ui_Speed, speed_text);
 
+            // Update indicators based on CAN data
+            update_indicator_state(ui_ParkingBrake, receivedData.handbrakeSwitch, "ParkingBrake");
+            update_indicator_state(ui_TurnSignal, receivedData.turnSignalIndicator != 0, "TurnSignal");
+            update_indicator_state(ui_CheckEngine, receivedData.checkEngineLight, "CheckEngine");
+            update_indicator_state(ui_DSC, receivedData.ascLampStatus, "DSC");
+
             lv_obj_invalidate(ui_rpmslider); // Force redraw
             lv_obj_invalidate(ui_RPM);
             lv_obj_invalidate(ui_Speed);
+            lv_obj_invalidate(ui_ParkingBrake);
+            lv_obj_invalidate(ui_TurnSignal);
+            lv_obj_invalidate(ui_CheckEngine);
+            lv_obj_invalidate(ui_DSC);
 
             lv_task_handler(); // Process LVGL updates
+            lv_refr_now(NULL); // Force immediate refresh
             lvgl_update_count++; // Increment counter
+            lastDataUpdateTime = current_time; // Update last data time
             dataReceived = false; // Clear flag after processing
         }
         lvgl_port_unlock();
-        vTaskDelay(pdMS_TO_TICKS(4)); // ~250 Hz to catch 20 Hz packets
+        vTaskDelay(pdMS_TO_TICKS(2)); // ~500 Hz to ensure 20 Hz updates
     }
 }
 
@@ -193,7 +240,7 @@ void setup()
     /* Initialize LVGL core */
     lv_init();
 
-    /* Initialize LVGL buffers in SRAM with 25 lines */
+    /* Initialize LVGL buffers in SRAM with 75 lines */
     uint32_t buffer_size = ESP_PANEL_LCD_H_RES * 75 * sizeof(lv_color_t);
     lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
     lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
@@ -253,7 +300,7 @@ void setup()
 
     lvgl_port_lock(-1);
     ui_init();
-    // Verify ui_rpmslider, ui_RPM, and ui_Speed
+    // Verify ui_rpmslider, ui_RPM, ui_Speed, and indicators
     if (ui_rpmslider == NULL) {
         Serial.println("ERROR: ui_rpmslider is NULL, check ui_init()");
         while (1);
@@ -266,17 +313,57 @@ void setup()
         Serial.println("ERROR: ui_Speed is NULL, check ui_init()");
         while (1);
     }
-    Serial.println("ui_rpmslider, ui_RPM, and ui_Speed initialized successfully");
+    if (ui_ParkingBrake == NULL) {
+        Serial.println("ERROR: ui_ParkingBrake is NULL, check ui_init()");
+        while (1);
+    }
+    if (ui_TurnSignal == NULL) {
+        Serial.println("ERROR: ui_TurnSignal is NULL, check ui_init()");
+        while (1);
+    }
+    if (ui_CheckEngine == NULL) {
+        Serial.println("ERROR: ui_CheckEngine is NULL, check ui_init()");
+        while (1);
+    }
+    if (ui_DSC == NULL) {
+        Serial.println("ERROR: ui_DSC is NULL, check ui_init()");
+        while (1);
+    }
+    Serial.println("ui_rpmslider, ui_RPM, ui_Speed, ui_ParkingBrake, ui_TurnSignal, ui_CheckEngine, ui_DSC initialized successfully");
     // Ensure widgets are not hidden
     lv_obj_clear_flag(ui_rpmslider, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(ui_RPM, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(ui_Speed, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ui_ParkingBrake, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ui_TurnSignal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ui_CheckEngine, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(ui_DSC, LV_OBJ_FLAG_HIDDEN);
     // Set arc range to 0-11000
     lv_arc_set_range(ui_rpmslider, 0, 11000);
     lv_arc_set_value(ui_rpmslider, 0);
     lv_label_set_text(ui_RPM, "0");
     lv_label_set_text(ui_Speed, "0");
-    Serial.println("Initial RPM set to 0, Speed set to 0 km/h");
+    // Initialize indicators to disabled state with explicit style reset
+    lvgl_port_lock(-1);
+    lv_obj_set_style_bg_color(ui_ParkingBrake, lv_color_hex(0xFF0000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui_ParkingBrake, LV_OPA_10, LV_PART_MAIN);
+    lv_obj_set_style_img_opa(ui_ParkingBrake, LV_OPA_10, 0);
+    lv_obj_set_style_bg_color(ui_TurnSignal, lv_color_hex(0xFF0000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui_TurnSignal, LV_OPA_10, LV_PART_MAIN);
+    lv_obj_set_style_img_opa(ui_TurnSignal, LV_OPA_10, 0);
+    lv_obj_set_style_bg_color(ui_CheckEngine, lv_color_hex(0xFF0000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui_CheckEngine, LV_OPA_10, LV_PART_MAIN);
+    lv_obj_set_style_img_opa(ui_CheckEngine, LV_OPA_10, 0);
+    lv_obj_set_style_bg_color(ui_DSC, lv_color_hex(0xFF0000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui_DSC, LV_OPA_10, LV_PART_MAIN);
+    lv_obj_set_style_img_opa(ui_DSC, LV_OPA_10, 0);
+    lv_obj_invalidate(ui_ParkingBrake);
+    lv_obj_invalidate(ui_TurnSignal);
+    lv_obj_invalidate(ui_CheckEngine);
+    lv_obj_invalidate(ui_DSC);
+    lv_refr_now(NULL);
+    lvgl_port_unlock();
+    Serial.println("Initial RPM set to 0, Speed set to 0 km/h, indicators set to disabled");
     lv_obj_invalidate(ui_rpmslider); // Force initial redraw
     lv_obj_invalidate(ui_RPM);
     lv_obj_invalidate(ui_Speed);
@@ -284,6 +371,9 @@ void setup()
     Serial.println("Initial screen refresh completed");
     lvgl_port_unlock();
 
+    // Initialize receivedData to ensure indicators start disabled
+    memset(&receivedData, 0, sizeof(CanData));
+    lastDataUpdateTime = millis();
     Serial.println("Setup done");
 }
 

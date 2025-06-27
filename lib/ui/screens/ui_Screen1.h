@@ -18,25 +18,25 @@ extern lv_obj_t * ui_screen;
 extern lv_obj_t * ui_rpmscale;
 extern lv_obj_t * ui_rpmslider;
 extern lv_obj_t * ui_RPM;
-extern lv_obj_t * ui_checkengine;
+extern lv_obj_t * ui_CheckEngine;
 extern lv_obj_t * ui_DSC;
 extern lv_obj_t * ui_fuel;
 extern lv_obj_t * ui_water;
 extern lv_obj_t * ui_fuelbar;
-extern lv_obj_t * ui_Turnsignal;
+extern lv_obj_t * ui_TurnSignal;
 extern lv_obj_t * ui_Speed;
-extern lv_obj_t * ui_Parkingbrake;
+extern lv_obj_t * ui_ParkingBrake;
 // CUSTOM VARIABLES
 extern lv_obj_t * uic_rpmslider;
 extern lv_obj_t * uic_RPM;
-extern lv_obj_t * uic_checkengine;
+extern lv_obj_t * uic_CheckEngine;
 extern lv_obj_t * uic_DSC;
 extern lv_obj_t * uic_fuel;
 extern lv_obj_t * uic_water;
 extern lv_obj_t * uic_fuelbar;
-extern lv_obj_t * uic_Turnsignal;
+extern lv_obj_t * uic_TurnSignal;
 extern lv_obj_t * uic_Speed;
-extern lv_obj_t * uic_Parkingbrake;
+extern lv_obj_t * uic_ParkingBrake;
 
 #ifdef __cplusplus
 } /*extern "C"*/
