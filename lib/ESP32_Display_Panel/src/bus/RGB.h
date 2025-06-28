@@ -40,7 +40,7 @@
         .timings = RGB_TIMING_CONFIG_DEFAULT(width, height),                            \
         .data_width = 16,                                                               \
         .psram_trans_align = 64,                                                      \
-        .hsync_gpio_num = hsync,                                                        \
+               .hsync_gpio_num = hsync,                                                        \
         .vsync_gpio_num = vsync,                                                        \
         .de_gpio_num = de,                                                              \
         .pclk_gpio_num = pclk,                                                          \

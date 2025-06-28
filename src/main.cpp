@@ -74,6 +74,7 @@ static bool prev_dsc = false;
 
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;
+esp_lcd_panel_handle_t lcd_handle = NULL; // For direct DMA calls
 
 /* Debug logging macro */
 #define ESPNOW_DEBUG Serial.printf
@@ -87,10 +88,14 @@ const uint32_t freq_log_interval = 1000; // Log frequency every 1000 ms
 /* Display flushing */
 void lvgl_port_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
 {
+    esp_log_level_set("esp_lcd", ESP_LOG_INFO);
     uint32_t start = micros();
-    panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, (uint16_t *)color_p);
-    Serial.printf("Draw time: %u us for %dx%d\n", micros() - start,
-                  area->x2 - area->x1 + 1, area->y2 - area->y1 + 1);
+    esp_err_t ret = esp_lcd_panel_draw_bitmap(lcd_handle, area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
+    uint32_t draw_time = micros() - start;
+    Serial.printf("Draw time: %u us for %dx%d (%u pixels), Return: %s (0x%x)\n", draw_time,
+                  area->x2 - area->x1 + 1, area->y2 - area->y1 + 1,
+                  (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1),
+                  esp_err_to_name(ret), ret);
     lv_disp_flush_ready(disp_drv);
 }
 
@@ -128,6 +133,15 @@ void lvgl_port_task(void *arg)
         lvgl_port_lock(-1);
         uint32_t current_time = millis();
         bool updated = false;
+
+        // Force full 800x75 update for testing
+        static uint32_t last_test = 0;
+        if (current_time - last_test >= 100) { // Every 100ms
+            lv_area_t test_area = {0, 0, 799, 74}; // 800x75
+            lv_obj_invalidate_area(lv_scr_act(), &test_area);
+            updated = true;
+            last_test = current_time;
+        }
 
         // Check for data timeout to set indicators to disabled
         if (current_time - lastDataUpdateTime > DATA_TIMEOUT_MS) {
@@ -302,6 +316,7 @@ void setup()
         Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x75)\n",
                      buffer_size);
         Serial.printf("Free SRAM after setup: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        Serial.printf("Buffer 1 address: %p, Buffer 2 address: %p\n", buf1, buf2);
     } else {
         Serial.println("ERROR: Failed to allocate double buffers in SRAM");
         if (buf1) heap_caps_free(buf1);
@@ -319,6 +334,7 @@ void setup()
 
     /* Initialize bus and device of panel */
     panel->init();
+    lcd_handle = panel->getLcd()->getHandle(); // Get panel handle for direct DMA calls
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
     panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
 #endif
