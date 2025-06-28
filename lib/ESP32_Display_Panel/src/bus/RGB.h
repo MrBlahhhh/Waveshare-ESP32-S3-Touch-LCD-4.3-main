@@ -20,7 +20,7 @@
 
 #define RGB_TIMING_CONFIG_DEFAULT(width, height)            \
     {                                                       \
-        .pclk_hz = 16 * 1000 * 1000,                        \
+        .pclk_hz = 20 * 1000 * 1000,                        \
         .h_res = width,                                     \
         .v_res = height,                                    \
         .hsync_pulse_width = 10,                            \
@@ -39,7 +39,7 @@
         .clk_src = LCD_CLK_SRC_PLL160M,                                                 \
         .timings = RGB_TIMING_CONFIG_DEFAULT(width, height),                            \
         .data_width = 16,                                                               \
-        .psram_trans_align = 64,                                                        \
+        .psram_trans_align = 64,                                                      \
         .hsync_gpio_num = hsync,                                                        \
         .vsync_gpio_num = vsync,                                                        \
         .de_gpio_num = de,                                                              \
@@ -50,7 +50,7 @@
         .disp_gpio_num = disp,                                                          \
         .on_frame_trans_done = (esp_lcd_rgb_panel_frame_trans_done_cb_t)callback,       \
         .flags = {                                                                      \
-            .fb_in_psram = 1,                                                           \
+            .fb_in_psram = 0,                                                           \
         },                                                                              \
     }
 #define RGB_PANEL_IO_CONFIG_DEFAULT(cs, sck, sda)           \

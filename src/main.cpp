@@ -87,7 +87,10 @@ const uint32_t freq_log_interval = 1000; // Log frequency every 1000 ms
 /* Display flushing */
 void lvgl_port_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
 {
+    uint32_t start = micros();
     panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, (uint16_t *)color_p);
+    Serial.printf("Draw time: %u us for %dx%d\n", micros() - start,
+                  area->x2 - area->x1 + 1, area->y2 - area->y1 + 1);
     lv_disp_flush_ready(disp_drv);
 }
 
@@ -418,16 +421,14 @@ void setup()
 
 void loop()
 {
-    // Log frequency metrics
     uint32_t current_time = millis();
     if (current_time - last_freq_log_time >= freq_log_interval) {
         float espnow_hz = (float)espnow_packet_count * 1000.0f / freq_log_interval;
         float lvgl_hz = (float)lvgl_update_count * 1000.0f / freq_log_interval;
         ESPNOW_DEBUG("FREQ: ESP-NOW Packet Hz: %.2f, LVGL Update Hz: %.2f\n", espnow_hz, lvgl_hz);
-        espnow_packet_count = 0; // Reset counters
+        espnow_packet_count = 0;
         lvgl_update_count = 0;
         last_freq_log_time = current_time;
     }
-
-    vTaskDelay(pdMS_TO_TICKS(10)); // 10ms for frequency logging
+    vTaskDelay(pdMS_TO_TICKS(10));
 }
