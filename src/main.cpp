@@ -31,9 +31,12 @@ extern lv_obj_t *ui_DSC; // DSC indicator
 #define LVGL_TICK_PERIOD_MS     (2) // 500 Hz for timer
 #define LVGL_TASK_MAX_DELAY_MS  (100)
 #define LVGL_TASK_MIN_DELAY_MS  (2) // ~500 Hz for active updates
-#define LVGL_TASK_IDLE_DELAY_MS (10) // ~100 Hz when idle
+#define LVGL_TASK_IDLE_DELAY_MS (20) // ~50 Hz when idle
 #define LVGL_TASK_STACK_SIZE    (6 * 1024)
-#define LVGL_TASK_PRIORITY      (6)
+#define LVGL_TASK_PRIORITY      (5)
+
+// Explicitly define bus type for RGB
+#define ESP_PANEL_LCD_BUS_TYPE 3 // 3=RGB in this driver
 
 /* ESP-NOW data structure */
 typedef struct {
@@ -78,6 +81,7 @@ esp_lcd_panel_handle_t lcd_handle = NULL; // For direct DMA calls
 
 /* Debug logging macro */
 #define ESPNOW_DEBUG Serial.printf
+#define DEBUG_FLUSH 0 // Disable flush logging to reduce overhead
 
 /* Counters for frequency measurement */
 static volatile uint32_t espnow_packet_count = 0;
@@ -89,13 +93,22 @@ const uint32_t freq_log_interval = 1000; // Log frequency every 1000 ms
 void lvgl_port_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
 {
     esp_log_level_set("esp_lcd", ESP_LOG_INFO);
+    static uint32_t last_log_time = 0;
     uint32_t start = micros();
+    uint32_t pixels = (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1);
     esp_err_t ret = esp_lcd_panel_draw_bitmap(lcd_handle, area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
     uint32_t draw_time = micros() - start;
-    Serial.printf("Draw time: %u us for %dx%d (%u pixels), Return: %s (0x%x)\n", draw_time,
-                  area->x2 - area->x1 + 1, area->y2 - area->y1 + 1,
-                  (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1),
-                  esp_err_to_name(ret), ret);
+    uint32_t current_time = millis();
+    #if DEBUG_FLUSH
+    // Log only if draw time is high or every 1 second
+    if (draw_time > 1000 || current_time - last_log_time >= 1000) {
+        Serial.printf("Flush: Buffer address: %p, Alignment: %u\n", color_p, (uint32_t)color_p % 32);
+        Serial.printf("Draw time: %u us for %dx%d (%u pixels), Return: %s (0x%x)\n", draw_time,
+                      area->x2 - area->x1 + 1, area->y2 - area->y1 + 1, pixels,
+                      esp_err_to_name(ret), ret);
+        last_log_time = current_time;
+    }
+    #endif
     lv_disp_flush_ready(disp_drv);
 }
 
@@ -123,25 +136,20 @@ void update_indicator_state(lv_obj_t *obj, bool enabled)
         lv_obj_set_style_bg_opa(obj, LV_OPA_10, LV_PART_MAIN);
         lv_obj_set_style_img_opa(obj, LV_OPA_10, 0); // For image-based indicators
     }
-    lv_obj_invalidate(obj); // Force redraw
+    lv_area_t area;
+    lv_obj_get_coords(obj, &area); // Get bounding box
+    lv_obj_invalidate_area(obj, &area); // Invalidate only the indicator's area
 }
 
 void lvgl_port_task(void *arg)
 {
     Serial.println("Starting LVGL task");
+    static uint32_t last_fps_time = 0;
+    static uint32_t fps_count = 0;
     while (1) {
         lvgl_port_lock(-1);
         uint32_t current_time = millis();
         bool updated = false;
-
-        // Force full 800x75 update for testing
-        static uint32_t last_test = 0;
-        if (current_time - last_test >= 100) { // Every 100ms
-            lv_area_t test_area = {0, 0, 799, 74}; // 800x75
-            lv_obj_invalidate_area(lv_scr_act(), &test_area);
-            updated = true;
-            last_test = current_time;
-        }
 
         // Check for data timeout to set indicators to disabled
         if (current_time - lastDataUpdateTime > DATA_TIMEOUT_MS) {
@@ -168,45 +176,51 @@ void lvgl_port_task(void *arg)
         }
 
         if (dataReceived) {
-            // Update RPM arc and label if changed
+            // Batch all updates
             if (receivedData.rpm != prev_rpm) {
                 lv_arc_set_value(ui_rpmslider, receivedData.rpm);
                 char rpm_text[16];
                 snprintf(rpm_text, sizeof(rpm_text), "%u", receivedData.rpm);
                 lv_label_set_text(ui_RPM, rpm_text);
-                lv_obj_invalidate(ui_rpmslider);
-                lv_obj_invalidate(ui_RPM);
+                lv_area_t area;
+                lv_obj_get_coords(ui_rpmslider, &area);
+                lv_obj_invalidate_area(ui_rpmslider, &area);
+                lv_obj_get_coords(ui_RPM, &area);
+                lv_obj_invalidate_area(ui_RPM, &area);
                 prev_rpm = receivedData.rpm;
                 updated = true;
             }
 
-            // Update speed label if changed
             if (receivedData.vehicleSpeed != prev_speed) {
                 char speed_text[16];
                 snprintf(speed_text, sizeof(speed_text), "%u", receivedData.vehicleSpeed);
                 lv_label_set_text(ui_Speed, speed_text);
-                lv_obj_invalidate(ui_Speed);
+                lv_area_t area;
+                lv_obj_get_coords(ui_Speed, &area);
+                lv_obj_invalidate_area(ui_Speed, &area);
                 prev_speed = receivedData.vehicleSpeed;
                 updated = true;
             }
 
-            // Update indicators only if state changed
             if (receivedData.handbrakeSwitch != prev_parkingBrake) {
                 update_indicator_state(ui_ParkingBrake, receivedData.handbrakeSwitch);
                 prev_parkingBrake = receivedData.handbrakeSwitch;
                 updated = true;
             }
+
             bool turnSignalState = receivedData.turnSignalIndicator != 0;
             if (turnSignalState != prev_turnSignal) {
                 update_indicator_state(ui_TurnSignal, turnSignalState);
                 prev_turnSignal = turnSignalState;
                 updated = true;
             }
+
             if (receivedData.checkEngineLight != prev_checkEngine) {
                 update_indicator_state(ui_CheckEngine, receivedData.checkEngineLight);
                 prev_checkEngine = receivedData.checkEngineLight;
                 updated = true;
             }
+
             if (receivedData.ascLampStatus != prev_dsc) {
                 update_indicator_state(ui_DSC, receivedData.ascLampStatus);
                 prev_dsc = receivedData.ascLampStatus;
@@ -222,6 +236,12 @@ void lvgl_port_task(void *arg)
             lv_task_handler();
             lv_refr_now(NULL);
             lvgl_update_count++;
+            fps_count++;
+            if (current_time - last_fps_time >= 1000) {
+                Serial.printf("FPS: %u\n", fps_count);
+                fps_count = 0;
+                last_fps_time = current_time;
+            }
         }
 
         lvgl_port_unlock();
@@ -275,6 +295,7 @@ void setup()
     /* Initialize WiFi for ESP-NOW */
     ESPNOW_DEBUG("ESP-NOW: Initializing WiFi in STA mode\n");
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false); // Disable WiFi power saving for DMA performance
     ESPNOW_DEBUG("ESP-NOW: WiFi MAC Address: %s\n", WiFi.macAddress().c_str());
 
     /* Initialize ESP-NOW */
@@ -302,10 +323,10 @@ void setup()
     /* Initialize LVGL core */
     lv_init();
 
-    /* Initialize LVGL buffers in SRAM with 75 lines */
+    /* Initialize LVGL buffers in DMA-capable memory with 75 lines */
     uint32_t buffer_size = ESP_PANEL_LCD_H_RES * 75 * sizeof(lv_color_t);
-    lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
-    lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, buffer_size, MALLOC_CAP_INTERNAL);
+    lv_color_t *buf1 = (lv_color_t *)heap_caps_aligned_alloc(32, buffer_size, MALLOC_CAP_DMA);
+    lv_color_t *buf2 = (lv_color_t *)heap_caps_aligned_alloc(32, buffer_size, MALLOC_CAP_DMA);
 
     static lv_disp_draw_buf_t draw_buf;
     static lv_disp_drv_t disp_drv;
@@ -313,12 +334,14 @@ void setup()
     lv_disp_drv_init(&disp_drv);
 
     if (buf1 && buf2) {
-        Serial.printf("Double buffering enabled in SRAM, buffer size: %u bytes each (800x75)\n",
+        Serial.printf("Double buffering enabled in DMA-capable memory, buffer size: %u bytes each (800x75)\n",
                      buffer_size);
         Serial.printf("Free SRAM after setup: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-        Serial.printf("Buffer 1 address: %p, Buffer 2 address: %p\n", buf1, buf2);
+        Serial.printf("Free PSRAM after setup: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        Serial.printf("Buffer 1 address: %p, Alignment: %u\n", buf1, (uint32_t)buf1 % 32);
+        Serial.printf("Buffer 2 address: %p, Alignment: %u\n", buf2, (uint32_t)buf2 % 32);
     } else {
-        Serial.println("ERROR: Failed to allocate double buffers in SRAM");
+        Serial.println("ERROR: Failed to allocate double buffers in DMA-capable memory");
         if (buf1) heap_caps_free(buf1);
         if (buf2) heap_caps_free(buf2);
         Serial.printf("Free SRAM after failure: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
@@ -335,9 +358,31 @@ void setup()
     /* Initialize bus and device of panel */
     panel->init();
     lcd_handle = panel->getLcd()->getHandle(); // Get panel handle for direct DMA calls
-#if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
+
+    /* Log bus type and verify */
+    Serial.printf("LCD Bus Type: %d (3=RGB)\n", ESP_PANEL_LCD_BUS_TYPE);
+    #if ESP_PANEL_LCD_BUS_TYPE == 3 // RGB
+        // Attempt to set pixel clock to 15 MHz (adjust based on panel datasheet)
+        // Note: ESP_Panel_Library may not expose this directly; check board settings
+        // panel->configLcdBusFrequency(15000000); // Uncomment if supported
+        Serial.println("RGB mode: Pixel clock configuration not directly accessible. Check board settings (e.g., board.h).");
+        Serial.println("RGB burst mode: Typically not applicable (continuous transfer)");
+        Serial.println("Burst mode enabled or assumed for optimal performance");
+    #elif ESP_PANEL_LCD_BUS_TYPE == 1 // SPI
+        panel->configLcdBusFrequency(40000000); // Set to 40 MHz for SPI
+        panel->init(); // Re-init to apply frequency
+        Serial.printf("SPI Frequency: %u Hz\n", panel->getLcdBusFrequency());
+        Serial.println("SPI burst mode: Assuming enabled (verify with panel library)");
+    #elif ESP_PANEL_LCD_BUS_TYPE == 2 // I2C
+        Serial.printf("I2C Frequency: %u Hz\n", panel->getLcdBusFrequency());
+        Serial.println("Burst mode: Not applicable for I2C");
+    #else
+        Serial.println("ERROR: Unsupported LCD Bus Type. Expected 3 (RGB), 1 (SPI), or 2 (I2C).");
+    #endif
+
+    #if ESP_PANEL_LCD_BUS_TYPE != 3
     panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
-#endif
+    #endif
 
     Serial.println("Initialize IO expander");
     ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000);
@@ -442,6 +487,7 @@ void loop()
         float espnow_hz = (float)espnow_packet_count * 1000.0f / freq_log_interval;
         float lvgl_hz = (float)lvgl_update_count * 1000.0f / freq_log_interval;
         ESPNOW_DEBUG("FREQ: ESP-NOW Packet Hz: %.2f, LVGL Update Hz: %.2f\n", espnow_hz, lvgl_hz);
+        Serial.printf("Free stack (LVGL task): %u bytes\n", uxTaskGetStackHighWaterMark(NULL));
         espnow_packet_count = 0;
         lvgl_update_count = 0;
         last_freq_log_time = current_time;
